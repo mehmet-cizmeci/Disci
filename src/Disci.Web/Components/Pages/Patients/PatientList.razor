@@ -1,0 +1,109 @@
+@page "/hastalar"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Hastalar - Disci</PageTitle>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="h3 m-0">Hastalar</h1>
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="showArchived" @bind="showArchived" @bind:after="Refresh" />
+        <label class="form-check-label" for="showArchived">Arşivdekileri de göster</label>
+    </div>
+</div>
+
+<input class="form-control form-control-lg mb-3" placeholder="Ad, soyad, telefon veya protokol no" aria-label="Hasta ara"
+       @bind="search" @bind:event="oninput" @bind:after="Refresh" />
+
+<div class="table-responsive">
+    <QuickGrid Items="rows" Pagination="pagination" Class="table table-hover align-middle mb-0">
+        <PropertyColumn Property="r => r.LegacyId" Title="Protokol" Sortable="true" />
+        <TemplateColumn Title="Ad soyad" SortBy="byName">
+            <a href="hastalar/@context.Id">@context.FirstName @context.LastName</a>
+            @if (context.IsArchived) { <span class="badge text-bg-secondary ms-1">Arşiv</span> }
+        </TemplateColumn>
+        <PropertyColumn Property="r => r.MobilePhone" Title="Cep telefonu" />
+        <TemplateColumn Title="Doğum tarihi" SortBy="byBirth">@Display.Date(context.BirthDate)</TemplateColumn>
+        <TemplateColumn Title="Son tedavi" SortBy="byLastVisit">@Display.Date(context.LastVisit)</TemplateColumn>
+    </QuickGrid>
+</div>
+<Paginator State="pagination" />
+
+@code {
+    private DisciDbContext db = default!;
+    private IQueryable<Row> rows = default!;
+    private readonly PaginationState pagination = new() { ItemsPerPage = 25 };
+    private string? search;
+    private bool showArchived;
+
+    private readonly GridSort<Row> byName = GridSort<Row>.ByAscending(r => r.LastName).ThenAscending(r => r.FirstName);
+    private readonly GridSort<Row> byBirth = GridSort<Row>.ByAscending(r => r.BirthDate);
+    private readonly GridSort<Row> byLastVisit = GridSort<Row>.ByDescending(r => r.LastVisit);
+
+    public sealed class Row
+    {
+        public int Id { get; init; }
+        public int? LegacyId { get; init; }
+        public string FirstName { get; init; } = "";
+        public string LastName { get; init; } = "";
+        public string? MobilePhone { get; init; }
+        public DateOnly? BirthDate { get; init; }
+        public DateOnly? LastVisit { get; init; }
+        public bool IsArchived { get; init; }
+    }
+
+    [SupplyParameterFromQuery(Name = "ara")]
+    private string? InitialSearch { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // A long-lived context is what QuickGrid's EF adapter expects; it is disposed with the page.
+        db = DbFactory.CreateDbContext();
+        search = InitialSearch;
+        rows = BuildQuery();
+    }
+
+    private IQueryable<Row> BuildQuery()
+    {
+        var q = db.Patients.AsNoTracking();
+        if (!showArchived)
+            q = q.Where(p => !p.IsArchived);
+
+        var term = search?.Trim();
+        if (!string.IsNullOrEmpty(term))
+        {
+            if (int.TryParse(term, out var number) && term.Length <= 6)
+                q = q.Where(p => p.LegacyId == number || p.Id == number);
+            else
+            {
+                var digits = new string(term.Where(char.IsDigit).ToArray());
+                foreach (var word in term.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    q = q.Where(p => p.FirstName.Contains(word) || p.LastName.Contains(word)
+                                     || (digits.Length >= 4 && (p.MobilePhone!.Replace(" ", "").Contains(digits)
+                                                                || p.HomePhone!.Replace(" ", "").Contains(digits))));
+            }
+        }
+
+        return q.OrderBy(p => p.LastName).ThenBy(p => p.FirstName).Select(p => new Row
+        {
+            Id = p.Id,
+            LegacyId = p.LegacyId,
+            FirstName = p.FirstName,
+            LastName = p.LastName,
+            MobilePhone = p.MobilePhone,
+            BirthDate = p.BirthDate,
+            LastVisit = p.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed).Max(s => (DateOnly?)s.Date),
+            IsArchived = p.IsArchived,
+        });
+    }
+
+    private async Task Refresh()
+    {
+        rows = BuildQuery();
+        await pagination.SetCurrentPageIndexAsync(0);
+    }
+
+    public ValueTask DisposeAsync() => db.DisposeAsync();
+}

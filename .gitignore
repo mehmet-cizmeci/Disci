@@ -1,0 +1,19 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+TestResults/
+
+# Yerel araç ayarları
+.claude/
+
+# Hasta verileri, fotoğraflar ve aktarım raporları asla depoya girmemeli.
+data/
+*.sqlite
+*.db
+*.mdf
+*.ldf
+*.bak
+*.csv

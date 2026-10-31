@@ -1,0 +1,144 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using Disci.Domain;
+using Disci.Infrastructure;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Disci.Web.Tests;
+
+/// <summary>
+/// Runs the real app against a throw-away LocalDB database filled with made-up data, deleted afterwards.
+/// Requests carrying the X-Test-Role header are signed in as a fake user with that role; no account or password is involved.
+/// </summary>
+public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    public const string RoleHeader = "X-Test-Role";
+
+    private readonly string _database = $"Disci_Tests_{Guid.NewGuid():N}";
+    private readonly string _filesRoot = Path.Combine(Path.GetTempPath(), "disci-tests-" + Guid.NewGuid().ToString("N"));
+
+    public TestData Data { get; private set; } = default!;
+
+    private string ConnectionString =>
+        $@"Server=(localdb)\MSSQLLocalDB;Database={_database};Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+        builder.UseSetting("ConnectionStrings:DefaultConnection", ConnectionString);
+        builder.UseSetting("FileStorage:Root", _filesRoot);
+        builder.UseSetting("Database:MigrateOnStartup", "true");
+        builder.ConfigureServices(services =>
+        {
+            services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+            services.PostConfigure<AuthenticationOptions>(o =>
+            {
+                o.DefaultScheme = TestAuthHandler.SchemeName;
+                o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+            });
+        });
+    }
+
+    public async Task InitializeAsync()
+    {
+        // Touching Services starts the app, which creates the database and roles.
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DisciDbContext>();
+        Data = await TestData.SeedAsync(db, _filesRoot);
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        using (var scope = Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<DisciDbContext>().Database.EnsureDeletedAsync();
+        if (Directory.Exists(_filesRoot))
+            Directory.Delete(_filesRoot, recursive: true);
+        await base.DisposeAsync();
+    }
+
+    public HttpClient ClientAs(string? role)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        if (role is not null) client.DefaultRequestHeaders.Add(RoleHeader, role);
+        return client;
+    }
+}
+
+/// <summary>Invented patients, treatments and payments; nothing here comes from a real clinic.</summary>
+public sealed record TestData(int PatientId, string LastName, int PhotoId, int PatientCount)
+{
+    public static async Task<TestData> SeedAsync(DisciDbContext db, string filesRoot)
+    {
+        var dentist = new Dentist { FullName = "Deneme Hekim" };
+        var procedure = new Procedure { Code = "TST01", Name = "Deneme dolgu", Category = "Deneme", Kind = ProcedureKind.Treatment };
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var main = new Patient
+        {
+            FirstName = "Deneme",
+            LastName = "HASTAOĞLU",
+            MobilePhone = "0 555 000 0001",
+            BirthDate = new DateOnly(1980, 1, 1),
+            RegisteredOn = today.AddYears(-1),
+            PrimaryDentist = dentist,
+        };
+        main.TreatmentSessions.Add(new TreatmentSession
+        {
+            Date = today.AddDays(-3),
+            Kind = TreatmentKind.Completed,
+            Dentist = dentist,
+            Items = [new TreatmentItem { Procedure = procedure, Description = "Deneme dolgu", ToothNumber = 16, Price = 1500 }],
+        });
+        main.Payments.Add(new Payment { Date = today.AddDays(-3), Method = PaymentMethod.Cash, Amount = 1000 });
+        main.Photos.Add(new PatientPhoto { TakenOn = today, Kind = PhotoKind.IntraOral, FilePath = "patients/test/photo.jpg" });
+
+        var others = new[]
+        {
+            new Patient { FirstName = "Örnek", LastName = "KİŞİ", RegisteredOn = today },
+            new Patient { FirstName = "Arşiv", LastName = "KAYDI", RegisteredOn = today, IsArchived = true },
+        };
+
+        db.AddRange(main, others[0], others[1]);
+        await db.SaveChangesAsync();
+
+        // A tiny valid JPEG header is enough for the file endpoint test.
+        var photoPath = Path.Combine(filesRoot, "patients", "test", "photo.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(photoPath)!);
+        await File.WriteAllBytesAsync(photoPath, [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0xFF, 0xD9]);
+
+        return new TestData(main.Id, main.LastName, main.Photos[0].Id, PatientCount: 2);
+    }
+}
+
+public sealed class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string SchemeName = "Test";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.TryGetValue(DisciWebFactory.RoleHeader, out var role))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "test-user"),
+            new Claim(ClaimTypes.Name, "test@disci.local"),
+            new Claim(ClaimTypes.Role, role.ToString()),
+        ], SchemeName);
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
+    }
+
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        // Mirror the cookie scheme: anonymous users are sent to the login page.
+        Response.Redirect("/Account/Login");
+        return Task.CompletedTask;
+    }
+}

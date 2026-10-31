@@ -1,0 +1,238 @@
+@page "/yonetim/kullanicilar"
+@attribute [Authorize(Roles = Roles.Admin)]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Kullanıcılar - Disci</PageTitle>
+
+<h1 class="h3 mb-3">Kullanıcılar</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success")" role="status">@message</div>
+}
+
+<div class="table-responsive mb-4">
+    <table class="table align-middle">
+        <thead>
+            <tr><th>Ad soyad</th><th>E-posta</th><th>Rol</th><th>Hekim kaydı</th><th>Durum</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var u in users)
+            {
+                <tr class="@(u.IsActive ? "" : "text-secondary")">
+                    <td>@u.FullName</td>
+                    <td>@u.Email</td>
+                    <td>@string.Join(", ", u.Roles.Select(Roles.DisplayName))</td>
+                    <td>@u.DentistName</td>
+                    <td>@(u.IsActive ? "Etkin" : "Devre dışı")</td>
+                    <td class="text-end text-nowrap">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartPasswordReset(u)">Parola</button>
+                        @if (u.Id != currentUserId)
+                        {
+                            <button class="btn btn-sm @(u.IsActive ? "btn-outline-danger" : "btn-outline-success") ms-1" @onclick="() => ToggleActive(u)">
+                                @(u.IsActive ? "Devre dışı bırak" : "Etkinleştir")
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (resetFor is not null)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h5">Parola sıfırla: @resetFor.FullName</h2>
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-6">
+                    <label class="form-label" for="newPassword">Yeni parola (en az 8 karakter, büyük/küçük harf ve rakam)</label>
+                    <input id="newPassword" type="password" class="form-control" autocomplete="new-password" @bind="resetPassword" />
+                </div>
+                <div class="col-sm-6">
+                    <button class="btn btn-primary" @onclick="ResetPassword">Kaydet</button>
+                    <button class="btn btn-link" @onclick="() => resetFor = null">Vazgeç</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="h5">Yeni kullanıcı</h2>
+        <EditForm Model="form" OnValidSubmit="CreateUser" FormName="new-user">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="fullName">Ad soyad</label>
+                    <InputText id="fullName" class="form-control" @bind-Value="form.FullName" />
+                    <ValidationMessage For="() => form.FullName" class="text-danger" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="email">E-posta (giriş adı)</label>
+                    <InputText id="email" class="form-control" autocomplete="off" @bind-Value="form.Email" />
+                    <ValidationMessage For="() => form.Email" class="text-danger" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="role">Rol</label>
+                    <InputSelect id="role" class="form-select" @bind-Value="form.Role">
+                        @foreach (var r in Roles.All)
+                        {
+                            <option value="@r">@Roles.DisplayName(r)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="dentist">Hekim kaydı</label>
+                    <InputSelect id="dentist" class="form-select" @bind-Value="form.DentistChoice">
+                        <option value="0">Yok</option>
+                        <option value="-1">Yeni hekim kaydı oluştur</option>
+                        @foreach (var d in dentists)
+                        {
+                            <option value="@d.Id">@d.FullName</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">Hekim hesapları kendi hekim kaydına bağlanmalı.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="password">İlk parola</label>
+                    <InputText id="password" type="password" class="form-control" autocomplete="new-password" @bind-Value="form.Password" />
+                    <ValidationMessage For="() => form.Password" class="text-danger" />
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Kullanıcı oluştur</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private List<UserRow> users = [];
+    private List<Dentist> dentists = [];
+    private NewUser form = new();
+    private string? currentUserId;
+    private string? message;
+    private bool messageIsError;
+    private UserRow? resetFor;
+    private string? resetPassword;
+
+    private sealed record UserRow(string Id, string FullName, string? Email, IList<string> Roles, string? DentistName, bool IsActive);
+
+    private sealed class NewUser
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Ad soyad gerekli.")]
+        public string FullName { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "E-posta gerekli.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Geçerli bir e-posta girin.")]
+        public string Email { get; set; } = "";
+
+        public string Role { get; set; } = Roles.Assistant;
+        public int DentistChoice { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Parola gerekli.")]
+        public string Password { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        currentUserId = UserManager.GetUserId(state.User);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        dentists = await db.Dentists.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.FullName).ToListAsync();
+        var list = await db.Users.AsNoTracking().Include(u => u.Dentist).OrderBy(u => u.FullName).ToListAsync();
+        var roleNames = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id select new { ur.UserId, r.Name }).ToListAsync();
+        users = list.Select(u => new UserRow(u.Id, u.FullName, u.Email,
+            roleNames.Where(x => x.UserId == u.Id).Select(x => x.Name!).ToList(), u.Dentist?.FullName, u.IsActive)).ToList();
+    }
+
+    private async Task CreateUser()
+    {
+        int? dentistId = form.DentistChoice > 0 ? form.DentistChoice : null;
+        if (form.DentistChoice == -1)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var dentist = new Dentist { FullName = form.FullName.Trim() };
+            db.Dentists.Add(dentist);
+            await db.SaveChangesAsync();
+            dentistId = dentist.Id;
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = form.Email.Trim(),
+            Email = form.Email.Trim(),
+            EmailConfirmed = true,
+            FullName = form.FullName.Trim(),
+            DentistId = dentistId,
+        };
+        var result = await UserManager.CreateAsync(user, form.Password);
+        if (result.Succeeded)
+            result = await UserManager.AddToRoleAsync(user, form.Role);
+
+        if (!Report(result, $"{user.FullName} oluşturuldu.")) return;
+        form = new NewUser();
+        await Load();
+    }
+
+    private async Task ToggleActive(UserRow row)
+    {
+        var user = await UserManager.FindByIdAsync(row.Id);
+        if (user is null) return;
+        user.IsActive = !user.IsActive;
+        // Deactivated accounts stay locked out; the new security stamp signs them out of open sessions too.
+        user.LockoutEnabled = true;
+        user.LockoutEnd = user.IsActive ? null : DateTimeOffset.MaxValue;
+        var result = await UserManager.UpdateAsync(user);
+        if (result.Succeeded)
+            result = await UserManager.UpdateSecurityStampAsync(user);
+        Report(result, user.IsActive ? $"{user.FullName} etkinleştirildi." : $"{user.FullName} devre dışı bırakıldı.");
+        await Load();
+    }
+
+    private void StartPasswordReset(UserRow row)
+    {
+        resetFor = row;
+        resetPassword = null;
+    }
+
+    private async Task ResetPassword()
+    {
+        if (resetFor is null || string.IsNullOrEmpty(resetPassword)) return;
+        var user = await UserManager.FindByIdAsync(resetFor.Id);
+        if (user is null) return;
+        var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+        var result = await UserManager.ResetPasswordAsync(user, token, resetPassword);
+        if (Report(result, $"{user.FullName} için parola değiştirildi."))
+            resetFor = null;
+        resetPassword = null;
+    }
+
+    private bool Report(IdentityResult result, string success)
+    {
+        messageIsError = !result.Succeeded;
+        message = result.Succeeded ? success : string.Join(" ", result.Errors.Select(e => IdentityErrorTr(e)));
+        return result.Succeeded;
+    }
+
+    private static string IdentityErrorTr(IdentityError e) => e.Code switch
+    {
+        "DuplicateUserName" or "DuplicateEmail" => "Bu e-posta ile bir kullanıcı zaten var.",
+        "PasswordTooShort" => "Parola en az 8 karakter olmalı.",
+        "PasswordRequiresDigit" => "Parolada en az bir rakam olmalı.",
+        "PasswordRequiresLower" => "Parolada en az bir küçük harf olmalı.",
+        "PasswordRequiresUpper" => "Parolada en az bir büyük harf olmalı.",
+        "InvalidEmail" => "E-posta geçersiz.",
+        _ => e.Description,
+    };
+}

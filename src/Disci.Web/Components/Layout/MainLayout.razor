@@ -1,0 +1,34 @@
+﻿@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="text-secondary small">
+                        @context.User.Identity?.Name
+                        @{ var role = Roles.All.FirstOrDefault(context.User.IsInRole); }
+                        @if (role is not null)
+                        {
+                            <span class="badge text-bg-light border ms-1">@Roles.DisplayName(role)</span>
+                        }
+                    </span>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-3 px-md-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Beklenmeyen bir hata oluştu.
+    <a href="." class="reload">Yenile</a>
+    <span class="dismiss">🗙</span>
+</div>

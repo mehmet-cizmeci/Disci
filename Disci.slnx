@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Disci.Domain/Disci.Domain.csproj" />
+    <Project Path="src/Disci.Infrastructure/Disci.Infrastructure.csproj" />
+    <Project Path="src/Disci.Web/Disci.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Disci.Web.Tests/Disci.Web.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Disci.LegacyImport/Disci.LegacyImport.csproj" />
+  </Folder>
+</Solution>
