@@ -81,6 +81,9 @@ namespace Disci.Infrastructure.Migrations
                     b.Property<int?>("AppointmentTypeId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ArrivedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("Chair")
                         .HasColumnType("int");
 
@@ -934,6 +937,89 @@ namespace Disci.Infrastructure.Migrations
                     b.ToTable("PrescriptionItems");
                 });
 
+            modelBuilder.Entity("Disci.Domain.PrescriptionTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Diagnosis")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PrescriptionTemplates");
+                });
+
+            modelBuilder.Entity("Disci.Domain.PrescriptionTemplateItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Dose")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("MedicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MedicationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("PrescriptionTemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Usage")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedicationId");
+
+                    b.HasIndex("PrescriptionTemplateId");
+
+                    b.ToTable("PrescriptionTemplateItems");
+                });
+
             modelBuilder.Entity("Disci.Domain.PriceList", b =>
                 {
                     b.Property<int>("Id")
@@ -1060,6 +1146,58 @@ namespace Disci.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Procedures");
+                });
+
+            modelBuilder.Entity("Disci.Domain.Reminder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("DoneAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ForRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("PatientId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("IsDone", "DueDate");
+
+                    b.ToTable("Reminders");
                 });
 
             modelBuilder.Entity("Disci.Domain.ToothNote", b =>
@@ -1695,6 +1833,24 @@ namespace Disci.Infrastructure.Migrations
                     b.Navigation("Prescription");
                 });
 
+            modelBuilder.Entity("Disci.Domain.PrescriptionTemplateItem", b =>
+                {
+                    b.HasOne("Disci.Domain.Medication", "Medication")
+                        .WithMany()
+                        .HasForeignKey("MedicationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Disci.Domain.PrescriptionTemplate", "PrescriptionTemplate")
+                        .WithMany("Items")
+                        .HasForeignKey("PrescriptionTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Medication");
+
+                    b.Navigation("PrescriptionTemplate");
+                });
+
             modelBuilder.Entity("Disci.Domain.PriceListItem", b =>
                 {
                     b.HasOne("Disci.Domain.PriceList", "PriceList")
@@ -1712,6 +1868,16 @@ namespace Disci.Infrastructure.Migrations
                     b.Navigation("PriceList");
 
                     b.Navigation("Procedure");
+                });
+
+            modelBuilder.Entity("Disci.Domain.Reminder", b =>
+                {
+                    b.HasOne("Disci.Domain.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Disci.Domain.ToothNote", b =>
@@ -1892,6 +2058,11 @@ namespace Disci.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Disci.Domain.Prescription", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Disci.Domain.PrescriptionTemplate", b =>
                 {
                     b.Navigation("Items");
                 });

@@ -1,0 +1,261 @@
+@page "/bildirimler"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject NotificationService Notifications
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<PageTitle>Bildirimler ve görevler - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Bildirimler ve görevler</h1>
+        <div class="sub">Bekleyenler, gecikenler, teyit edilecek randevular, tahsilat hatırlatmaları ve kontrol zamanı gelen hastalar</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="() => newTask = new()"><Icon Name="plus" /> Görev ekle</button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8 d-flex flex-column gap-4">
+        @if (groups.Count == 0)
+        {
+            <div class="panel"><div class="empty"><Icon Name="check-circle" /><div>Her şey yolunda; bekleyen iş yok.</div></div></div>
+        }
+        @foreach (var g in groups)
+        {
+            <div class="panel" id="@g.Key">
+                <div class="panel-head">
+                    <Icon Name="@GroupIcon(g.Key)" />
+                    <h2>@NotificationService.GroupTitle(g.Key)</h2>
+                    <div class="actions"><span class="chip">@g.Count()</span></div>
+                </div>
+                <div class="list">
+                    @foreach (var n in g)
+                    {
+                        <div class="list-row">
+                            <span class="notice-dot @n.Tone.ToString().ToLowerInvariant()"></span>
+                            <div class="grow">
+                                <div class="title">
+                                    @if (n.PatientId is { } pid)
+                                    {
+                                        <a href="hastalar/@pid" class="text-body">@n.Title</a>
+                                    }
+                                    else
+                                    {
+                                        @n.Title
+                                    }
+                                </div>
+                                <div class="meta">@n.Detail</div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                @if (n.Phone is not null)
+                                {
+                                    <a class="btn btn-sm btn-light btn-icon" href="tel:@n.Phone" title="Ara: @n.Phone"><Icon Name="phone" Class="ico-sm" /></a>
+                                    @if (n.Message is not null && Display.WhatsApp(n.Phone, n.Message) is { } wa)
+                                    {
+                                        <a class="btn btn-sm btn-light btn-icon" href="@wa" target="_blank" rel="noopener" title="WhatsApp mesajı hazırla"><Icon Name="message" Class="ico-sm" /></a>
+                                    }
+                                }
+                                @switch (n.Kind)
+                                {
+                                    case NoticeKind.Unconfirmed:
+                                        <button class="btn btn-sm btn-soft" @onclick="() => SetStatus(n.AppointmentId!.Value, AppointmentStatus.Confirmed)">Teyit et</button>
+                                        <button class="btn btn-sm btn-light" @onclick="() => SetStatus(n.AppointmentId!.Value, AppointmentStatus.Cancelled)">İptal</button>
+                                        break;
+                                    case NoticeKind.Late:
+                                        <button class="btn btn-sm btn-primary" @onclick="() => SetStatus(n.AppointmentId!.Value, AppointmentStatus.Arrived)">Geldi</button>
+                                        <button class="btn btn-sm btn-light" @onclick="() => SetStatus(n.AppointmentId!.Value, AppointmentStatus.NoShow)">Gelmedi</button>
+                                        break;
+                                    case NoticeKind.Waiting:
+                                        <button class="btn btn-sm btn-soft" @onclick="() => SetStatus(n.AppointmentId!.Value, AppointmentStatus.InChair)">Koltuğa al</button>
+                                        break;
+                                    case NoticeKind.Task:
+                                        <button class="btn btn-sm btn-soft" @onclick="() => CompleteTask(n.ReminderId!.Value)"><Icon Name="check" Class="ico-sm" /> Tamamlandı</button>
+                                        break;
+                                    case NoticeKind.Recall:
+                                        <a class="btn btn-sm btn-soft" href="randevular?hasta=@n.PatientId">Randevu ver</a>
+                                        break;
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-4 d-flex flex-column gap-4">
+        <div class="panel">
+            <div class="panel-head"><Icon Name="list" /><h2>Yaklaşan görevler</h2></div>
+            @if (upcoming.Count == 0)
+            {
+                <div class="empty py-4">İleri tarihli görev yok.</div>
+            }
+            else
+            {
+                <div class="list">
+                    @foreach (var r in upcoming)
+                    {
+                        <div class="list-row">
+                            <div class="grow">
+                                <div class="title">@r.Title</div>
+                                <div class="meta">@Display.Date(r.DueDate) @(r.Patient is null ? "" : $"· {r.Patient.FullName}") @(r.ForRole is null ? "" : $"· {Roles.DisplayName(r.ForRole)}")</div>
+                            </div>
+                            <button class="btn btn-sm btn-light btn-icon" title="Tamamlandı" @onclick="() => CompleteTask(r.Id)"><Icon Name="check" Class="ico-sm" /></button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="panel">
+            <div class="panel-head"><Icon Name="check-circle" /><h2>Son tamamlananlar</h2></div>
+            <div class="list">
+                @foreach (var r in done)
+                {
+                    <div class="list-row">
+                        <div class="grow">
+                            <div class="title text-secondary text-decoration-line-through">@r.Title</div>
+                            <div class="meta">@(r.DoneAt is { } d ? d.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "")</div>
+                        </div>
+                        <button class="btn btn-sm btn-light btn-icon" title="Geri al" @onclick="() => ReopenTask(r.Id)"><Icon Name="restore" Class="ico-sm" /></button>
+                    </div>
+                }
+                @if (done.Count == 0) { <div class="empty py-3">—</div> }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (newTask is not null)
+{
+    <Modal Title="Görev ekle" OnClose="() => newTask = null">
+        <ChildContent>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label" for="tk-title">Görev</label>
+                    <input id="tk-title" class="form-control" placeholder="Örn. laboratuvardan kron gelince hastayı ara" @bind="newTask.Title" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="tk-date">Tarih</label>
+                    <input id="tk-date" type="date" class="form-control" @bind="newTask.DueDate" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="tk-role">Kimin için</label>
+                    <select id="tk-role" class="form-select" @bind="newTask.ForRole">
+                        <option value="">Herkes</option>
+                        <option value="@Roles.Assistant">Asistan</option>
+                        <option value="@Roles.Dentist">Hekim</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Hasta (isteğe bağlı)</label>
+                    <PatientPicker @bind-Selected="newTask.Patient" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="tk-notes">Not</label>
+                    <textarea id="tk-notes" class="form-control" rows="2" @bind="newTask.Notes"></textarea>
+                </div>
+            </div>
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => newTask = null">Vazgeç</button>
+            <button class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(newTask.Title)" @onclick="SaveTask"><Icon Name="check" /> Kaydet</button>
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private List<IGrouping<NoticeKind, Notice>> groups = [];
+    private List<Reminder> upcoming = [], done = [];
+    private TaskForm? newTask;
+    private string? role;
+
+    private sealed class TaskForm
+    {
+        public string? Title { get; set; }
+        public DateOnly DueDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? ForRole { get; set; }
+        public PatientPicker.PatientOption? Patient { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private static string GroupIcon(NoticeKind k) => k switch
+    {
+        NoticeKind.Waiting => "chair",
+        NoticeKind.Late => "clock",
+        NoticeKind.Unconfirmed => "phone",
+        NoticeKind.DebtorToday => "wallet",
+        NoticeKind.Task => "list",
+        NoticeKind.Birthday => "cake",
+        _ => "repeat",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        role = NotificationService.RoleFor(await Me.PrincipalAsync());
+        await Load();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) Events.Changed += OnChanged;
+    }
+
+    private Task OnChanged() => InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    private async Task Load()
+    {
+        groups = (await Notifications.GetAsync(includeLowPriority: true, role)).GroupBy(n => n.Kind).OrderBy(g => g.Key).ToList();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        upcoming = await db.Reminders.AsNoTracking().Include(r => r.Patient)
+            .Where(r => !r.IsDone && r.DueDate > today).OrderBy(r => r.DueDate).Take(20).ToListAsync();
+        done = await db.Reminders.AsNoTracking().Where(r => r.IsDone).OrderByDescending(r => r.DoneAt).Take(8).ToListAsync();
+    }
+
+    private async Task SetStatus(int appointmentId, AppointmentStatus status)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Appointments.FindAsync(appointmentId) is not { } a) return;
+        Scheduling.SetStatus(a, status, DateTime.Now);
+        await db.SaveChangesAsync();
+        await Events.NotifyAsync();
+    }
+
+    private async Task CompleteTask(int id) => await SetDone(id, true);
+
+    private async Task ReopenTask(int id) => await SetDone(id, false);
+
+    private async Task SetDone(int id, bool isDone)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Reminders.FindAsync(id) is not { } r) return;
+        r.IsDone = isDone;
+        r.DoneAt = isDone ? DateTime.UtcNow : null;
+        await db.SaveChangesAsync();
+        await Events.NotifyAsync();
+    }
+
+    private async Task SaveTask()
+    {
+        if (newTask is null || string.IsNullOrWhiteSpace(newTask.Title)) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.Reminders.Add(new Reminder
+        {
+            Title = newTask.Title.Trim(),
+            DueDate = newTask.DueDate,
+            ForRole = string.IsNullOrEmpty(newTask.ForRole) ? null : newTask.ForRole,
+            PatientId = newTask.Patient?.Id,
+            Notes = string.IsNullOrWhiteSpace(newTask.Notes) ? null : newTask.Notes.Trim(),
+            CreatedByUserId = await Me.IdAsync(),
+        });
+        await db.SaveChangesAsync();
+        newTask = null;
+        await Events.NotifyAsync();
+    }
+
+    public void Dispose() => Events.Changed -= OnChanged;
+}

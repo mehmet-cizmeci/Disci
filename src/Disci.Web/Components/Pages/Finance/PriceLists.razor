@@ -1,0 +1,332 @@
+@page "/fiyatlar"
+@attribute [Authorize(Roles = $"{Roles.Admin},{Roles.Dentist}")]
+@rendermode InteractiveServer
+@inject IDbContextFactory<DisciDbContext> DbFactory
+
+<PageTitle>Fiyat listeleri - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Fiyat listeleri</h1>
+        <div class="sub">Tedavi eklerken ücret, hastanın listesinden (yoksa varsayılan listeden) gelir.</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-light" @onclick="() => copying = true" disabled="@(current is null)"><Icon Name="plus" /> Listeyi kopyala</button>
+        <button class="btn btn-primary" @onclick="() => adding = new()"><Icon Name="plus" /> Yeni işlem</button>
+    </div>
+</div>
+
+@if (lists.Count == 0)
+{
+    <div class="panel mb-4">
+        <div class="empty">
+            <Icon Name="tag" />
+            <div class="mb-2">Henüz fiyat listesi yok.</div>
+            <button class="btn btn-primary btn-sm" @onclick="CreateFirstList">Varsayılan liste oluştur</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-lg-3">
+            <div class="panel">
+                <div class="panel-head"><h2>Listeler</h2></div>
+                <div class="list">
+                    @foreach (var l in lists)
+                    {
+                        <button class="list-row hover w-100 border-0 text-start @(current?.Id == l.Id ? "bg-body-tertiary" : "bg-transparent")" @onclick="() => Select(l.Id)">
+                            <span class="grow">
+                                <span class="title d-block @(current?.Id == l.Id ? "text-primary" : "")">@l.Name</span>
+                                <span class="meta d-block">@l.Items.Count işlem @(l.VatRate is { } v ? $"· KDV %{v:0.##}" : "")</span>
+                            </span>
+                            @if (l.IsDefault) { <span class="chip chip-success">Varsayılan</span> }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            @if (current is not null)
+            {
+                <div class="panel panel-flush">
+                    <div class="panel-body d-flex flex-wrap gap-2 align-items-center border-bottom">
+                        <div class="input-icon flex-grow-1" style="min-width:220px">
+                            <Icon Name="search" />
+                            <input class="form-control" placeholder="İşlem ara" @bind="term" @bind:event="oninput" />
+                        </div>
+                        <select class="form-select" style="width:auto" @bind="category" aria-label="Kategori">
+                            <option value="">Tüm kategoriler</option>
+                            @foreach (var c in rows.Select(r => r.Category).Distinct().Order())
+                            {
+                                <option value="@c">@c</option>
+                            }
+                        </select>
+                        <div class="d-flex gap-1 align-items-center">
+                            <div class="input-group" style="width:150px">
+                                <input type="number" step="1" class="form-control" placeholder="%" @bind="raise" aria-label="Zam oranı" />
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <button class="btn btn-soft" disabled="@(raise is null or 0)" @onclick="() => confirmRaise = true"><Icon Name="percent" /> Toplu güncelle</button>
+                        </div>
+                        @if (!current.IsDefault)
+                        {
+                            <button class="btn btn-light" @onclick="MakeDefault">Varsayılan yap</button>
+                        }
+                    </div>
+                    <div class="table-responsive" style="max-height:calc(100vh - 300px)">
+                        <table class="table table-hover align-middle">
+                            <thead style="position:sticky;top:0;z-index:1"><tr><th>Kod</th><th>İşlem</th><th>Kategori</th><th class="text-end" style="width:190px">Ücret (KDV dahil)</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in Filtered)
+                                {
+                                    <tr>
+                                        <td class="text-secondary small">@r.Code</td>
+                                        <td>@r.Name @if (r.Kind == ProcedureKind.Finding) { <span class="chip ms-1">Bulgu</span> }</td>
+                                        <td class="text-secondary small">@r.Category</td>
+                                        <td class="text-end">
+                                            <input type="number" min="0" step="0.01" class="form-control form-control-sm text-end tabular @(r.Price is null ? "text-secondary" : "")"
+                                                   placeholder="fiyat yok" value="@r.Price?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                   @onchange="e => SetPrice(r, e.Value?.ToString())" aria-label="@r.Name ücreti" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="paginator">@Filtered.Count() işlem · değişiklikler hücreden çıkınca kaydedilir</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (adding is not null)
+{
+    <Modal Title="Yeni işlem" OnClose="() => adding = null">
+        <ChildContent>
+            <div class="row g-3">
+                <div class="col-sm-4">
+                    <label class="form-label" for="np-code">Kod</label>
+                    <input id="np-code" class="form-control" @bind="adding.Code" />
+                </div>
+                <div class="col-sm-8">
+                    <label class="form-label" for="np-name">İşlem adı</label>
+                    <input id="np-name" class="form-control" @bind="adding.Name" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="np-cat">Kategori</label>
+                    <input id="np-cat" class="form-control" list="categories" @bind="adding.Category" />
+                    <datalist id="categories">
+                        @foreach (var c in rows.Select(r => r.Category).Distinct().Order()) { <option value="@c"></option> }
+                    </datalist>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="np-price">Ücret (@current?.Name)</label>
+                    <input id="np-price" type="number" min="0" step="0.01" class="form-control" @bind="adding.Price" />
+                </div>
+            </div>
+            @if (error is not null) { <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div> }
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => adding = null">Vazgeç</button>
+            <button class="btn btn-primary" @onclick="AddProcedure"><Icon Name="check" /> Kaydet</button>
+        </Footer>
+    </Modal>
+}
+
+@if (copying)
+{
+    <Modal Title="Listeyi kopyala" OnClose="() => copying = false">
+        <ChildContent>
+            <p class="small text-secondary">"@current?.Name" listesindeki bütün fiyatlarla yeni bir liste açılır. Kurumlara veya kampanyalara özel tarifeler için kullanın.</p>
+            <label class="form-label" for="cp-name">Yeni liste adı</label>
+            <input id="cp-name" class="form-control" @bind="copyName" />
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => copying = false">Vazgeç</button>
+            <button class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(copyName)" @onclick="CopyList">Oluştur</button>
+        </Footer>
+    </Modal>
+}
+
+@if (confirmRaise)
+{
+    <Modal Title="Toplu fiyat güncelleme" OnClose="() => confirmRaise = false">
+        <ChildContent>
+            <p class="m-0">"@current?.Name" listesindeki @Filtered.Count(r => r.Price is not null) fiyat <b>%@raise</b> @(raise > 0 ? "artırılacak" : "düşürülecek") ve tam liraya yuvarlanacak
+                @(string.IsNullOrEmpty(term) && string.IsNullOrEmpty(category) ? "." : " (yalnızca süzülen işlemler).")</p>
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => confirmRaise = false">Vazgeç</button>
+            <button class="btn btn-primary" @onclick="ApplyRaise">Uygula</button>
+        </Footer>
+    </Modal>
+}
+
+<Toast @ref="toast" />
+
+@code {
+    private List<PriceList> lists = [];
+    private PriceList? current;
+    private List<Row> rows = [];
+    private string? term, category, error, copyName;
+    private decimal? raise;
+    private bool copying, confirmRaise;
+    private NewProcedure? adding;
+    private Toast? toast;
+
+    private sealed class Row
+    {
+        public int ProcedureId { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string Category { get; init; } = "";
+        public ProcedureKind Kind { get; init; }
+        public decimal? Price { get; set; }
+    }
+
+    private sealed class NewProcedure
+    {
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public string? Category { get; set; }
+        public decimal Price { get; set; }
+    }
+
+    private IEnumerable<Row> Filtered
+    {
+        get
+        {
+            var words = (term ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return rows.Where(r => (string.IsNullOrEmpty(category) || r.Category == category)
+                                   && words.All(w => r.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase) || r.Code.Contains(w, StringComparison.CurrentCultureIgnoreCase)));
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load(null);
+
+    private async Task Load(int? selectId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        lists = await db.PriceLists.AsNoTracking().Include(l => l.Items).OrderByDescending(l => l.IsDefault).ThenBy(l => l.Name).ToListAsync();
+        current = lists.FirstOrDefault(l => l.Id == (selectId ?? current?.Id)) ?? lists.FirstOrDefault();
+        var prices = current?.Items.ToDictionary(i => i.ProcedureId, i => i.Price) ?? [];
+        rows = (await db.Procedures.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Category).ThenBy(p => p.Name).ToListAsync())
+            .Select(p => new Row { ProcedureId = p.Id, Code = p.Code, Name = p.Name, Category = p.Category, Kind = p.Kind, Price = prices.TryGetValue(p.Id, out var v) ? v : null })
+            .ToList();
+    }
+
+    private Task Select(int id) => Load(id);
+
+    /// <summary>Prices are entered VAT included; the net price and VAT share follow from the list's VAT rate.</summary>
+    private static void Apply(PriceListItem item, decimal price, decimal? vatRate)
+    {
+        item.Price = price;
+        item.BasePrice = vatRate is > 0 ? Math.Round(price / (1 + vatRate.Value / 100), 2) : price;
+        item.VatAmount = vatRate is > 0 ? price - item.BasePrice : null;
+    }
+
+    private async Task SetPrice(Row r, string? value)
+    {
+        if (current is null) return;
+        decimal? price = decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0 ? v : null;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var item = await db.PriceListItems.FirstOrDefaultAsync(i => i.PriceListId == current.Id && i.ProcedureId == r.ProcedureId);
+        if (price is null)
+        {
+            if (item is not null) db.PriceListItems.Remove(item);
+        }
+        else
+        {
+            if (item is null)
+            {
+                item = new PriceListItem { PriceListId = current.Id, ProcedureId = r.ProcedureId };
+                db.PriceListItems.Add(item);
+            }
+            Apply(item, price.Value, current.VatRate);
+        }
+        await db.SaveChangesAsync();
+        r.Price = price;
+        _ = toast?.Show(price is null ? $"{r.Name}: fiyat kaldırıldı" : $"{r.Name}: {Display.Money(price.Value)}");
+    }
+
+    private async Task ApplyRaise()
+    {
+        if (current is null || raise is not { } pct) return;
+        var ids = Filtered.Where(r => r.Price is not null).Select(r => r.ProcedureId).ToList();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var items = await db.PriceListItems.Where(i => i.PriceListId == current.Id && ids.Contains(i.ProcedureId)).ToListAsync();
+        foreach (var i in items)
+            Apply(i, Math.Round(i.Price * (1 + pct / 100), 0, MidpointRounding.AwayFromZero), current.VatRate);
+        await db.SaveChangesAsync();
+        confirmRaise = false;
+        raise = null;
+        await Load(current.Id);
+        _ = toast?.Show($"{items.Count} fiyat güncellendi.");
+    }
+
+    private async Task MakeDefault()
+    {
+        if (current is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.PriceLists.ExecuteUpdateAsync(s => s.SetProperty(l => l.IsDefault, l => l.Id == current.Id));
+        await Load(current.Id);
+    }
+
+    private async Task CopyList()
+    {
+        if (current is null || string.IsNullOrWhiteSpace(copyName)) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var copy = new PriceList
+        {
+            Name = copyName.Trim(),
+            Currency = current.Currency,
+            VatRate = current.VatRate,
+            Items = current.Items.Select(i => new PriceListItem { ProcedureId = i.ProcedureId, BasePrice = i.BasePrice, VatAmount = i.VatAmount, Price = i.Price }).ToList(),
+        };
+        db.PriceLists.Add(copy);
+        await db.SaveChangesAsync();
+        copying = false;
+        copyName = null;
+        await Load(copy.Id);
+    }
+
+    private async Task CreateFirstList()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.PriceLists.Add(new PriceList { Name = "Genel tarife", IsDefault = true });
+        await db.SaveChangesAsync();
+        await Load(null);
+    }
+
+    private async Task AddProcedure()
+    {
+        error = null;
+        if (adding is null || string.IsNullOrWhiteSpace(adding.Name) || string.IsNullOrWhiteSpace(adding.Code))
+        {
+            error = "Kod ve işlem adı gerekli.";
+            return;
+        }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var code = adding.Code.Trim().ToUpperInvariant();
+        if (await db.Procedures.AnyAsync(p => p.Code == code))
+        {
+            error = "Bu kodla bir işlem zaten var.";
+            return;
+        }
+        var proc = new Procedure { Code = code, Name = adding.Name.Trim(), Category = string.IsNullOrWhiteSpace(adding.Category) ? "Genel" : adding.Category.Trim(), Kind = ProcedureKind.Treatment };
+        db.Procedures.Add(proc);
+        if (current is not null && adding.Price > 0)
+        {
+            var item = new PriceListItem { PriceListId = current.Id, Procedure = proc };
+            Apply(item, adding.Price, current.VatRate);
+            db.PriceListItems.Add(item);
+        }
+        await db.SaveChangesAsync();
+        adding = null;
+        await Load(current?.Id);
+        _ = toast?.Show($"{proc.Name} eklendi.");
+    }
+}

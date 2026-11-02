@@ -5,14 +5,35 @@ using Disci.Web.Components;
 using Disci.Web.Components.Account;
 using Disci.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
 
-var builder = WebApplication.CreateBuilder(args);
+// A published copy (wwwroot next to the exe) serves from its own folder whatever the working directory is;
+// a Windows service starts in System32. During development the default (project folder) is kept.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = Directory.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot")) ? AppContext.BaseDirectory : null,
+});
+
+// Runs as a Windows service on the clinic computer; a no-op when started from a console.
+builder.Host.UseWindowsService(o => o.ServiceName = "Disci");
+
+// The service account may have no user profile, so sign-in cookie keys are kept in a known folder;
+// without this everyone is signed out whenever the service restarts.
+if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+{
+    var dataProtection = builder.Services.AddDataProtection()
+        .SetApplicationName("Disci")
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+    if (OperatingSystem.IsWindows())
+        dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: true);
+}
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(o => o.DetailedErrors = builder.Environment.IsDevelopment());
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
@@ -50,6 +71,10 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection(FileStorageOptions.Section));
 builder.Services.AddScoped<IdentitySeeder>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ClinicEvents>();
+builder.Services.AddScoped<CurrentUser>();
+builder.Services.AddScoped<NotificationService>();
 
 var app = builder.Build();
 

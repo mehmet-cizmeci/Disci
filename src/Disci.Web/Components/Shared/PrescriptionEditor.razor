@@ -1,0 +1,270 @@
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<Modal Title="@(PrescriptionId is null ? "Reçete yaz" : "Reçeteyi düzenle")" Wide="true" OnClose="OnClose">
+    <ChildContent>
+        @if (loading)
+        {
+            <p class="text-secondary">Yükleniyor...</p>
+        }
+        else
+        {
+            @if (PrescriptionSafety.IsAllergy(allergies))
+            {
+                <div class="callout callout-danger mb-3"><Icon Name="alert" /> <div><span class="fw-650">İlaç alerjisi:</span> @allergies</div></div>
+            }
+            @if (conditions.Count > 0)
+            {
+                <div class="callout callout-warning mb-3"><Icon Name="heart" /> <div><span class="fw-650">Sağlık durumu:</span> @string.Join(", ", conditions)</div></div>
+            }
+
+            @if (templates.Count > 0)
+            {
+                <label class="form-label">Şablondan ekle</label>
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    @foreach (var t in templates)
+                    {
+                        var risky = t.Items.Any(i => PrescriptionSafety.AllergyWarnings(allergies, i.MedicationName).Count > 0);
+                        <button type="button" class="chip @(risky ? "chip-danger" : "")" title="@string.Join(", ", t.Items.Select(i => i.MedicationName))" @onclick="() => ApplyTemplate(t)">
+                            <Icon Name="@(risky ? "alert" : "copy")" Class="ico-sm" /> @t.Name
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-5">
+                    <label class="form-label" for="rx-dentist">Hekim (reçete bu hekim adına düzenlenir)</label>
+                    <select id="rx-dentist" class="form-select" @bind="dentistId">
+                        <option value="0">Hekim seçin</option>
+                        @foreach (var d in dentists)
+                        {
+                            <option value="@d.Id">@d.FullName</option>
+                        }
+                    </select>
+                    @if (onBehalf)
+                    {
+                        <div class="form-text">Hekim adına yazıyorsunuz; reçetede yazan olarak adınız saklanır.</div>
+                    }
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="rx-date">Tarih</label>
+                    <input id="rx-date" type="date" class="form-control" @bind="date" />
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label" for="rx-diag">Tanı</label>
+                    <input id="rx-diag" class="form-control" list="rx-diagnoses" placeholder="Örn. akut periapikal apse" @bind="diagnosis" />
+                    <datalist id="rx-diagnoses">
+                        @foreach (var dg in CommonDiagnoses) { <option value="@dg"></option> }
+                    </datalist>
+                </div>
+            </div>
+
+            <MedicationLines Lines="lines" Catalog="catalog" Allergies="@allergies" OnChanged="() => info = null" />
+
+            <label class="form-label mt-3" for="rx-notes">Hastaya not / açıklama</label>
+            <textarea id="rx-notes" class="form-control" rows="2" @bind="notes"></textarea>
+
+            @if (savingTemplate)
+            {
+                <div class="panel p-3 mt-3" style="background:var(--c-surface-2)">
+                    <label class="form-label" for="rx-tname">Şablon adı</label>
+                    <div class="d-flex gap-2">
+                        <input id="rx-tname" class="form-control" placeholder="Örn. Kanal tedavisi sonrası" @bind="templateName" />
+                        <button type="button" class="btn btn-primary text-nowrap" @onclick="SaveAsTemplate">Şablonu kaydet</button>
+                        <button type="button" class="btn btn-light" @onclick="() => savingTemplate = false">Vazgeç</button>
+                    </div>
+                    <div class="form-text">İlaçlar, tanı ve not şablona kaydedilir; hekim ve tarih kaydedilmez.</div>
+                </div>
+            }
+            @if (info is not null)
+            {
+                <div class="callout callout-success mt-3"><Icon Name="check-circle" /> @info</div>
+            }
+            @if (error is not null)
+            {
+                <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div>
+            }
+        }
+    </ChildContent>
+    <Footer>
+        @if (canEditTemplates && !savingTemplate)
+        {
+            <button type="button" class="btn btn-light me-auto" disabled="@(lines.Count == 0)" @onclick="StartTemplate"><Icon Name="copy" /> Şablon olarak kaydet</button>
+        }
+        <button type="button" class="btn btn-light" @onclick="OnClose">Vazgeç</button>
+        <button type="button" class="btn btn-light" disabled="@saving" @onclick="() => Save(print: false)"><Icon Name="check" /> Kaydet</button>
+        <button type="button" class="btn btn-primary" disabled="@saving" @onclick="() => Save(print: true)"><Icon Name="printer" /> Kaydet ve yazdır</button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public int PatientId { get; set; }
+    [Parameter] public int? PrescriptionId { get; set; }
+    /// <summary>Starts a new prescription with the medicines of an earlier one ("yeniden yaz").</summary>
+    [Parameter] public int? CopyFromId { get; set; }
+    /// <summary>Called with the saved id and whether it should be printed now.</summary>
+    [Parameter] public EventCallback<(int Id, bool Print)> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private static readonly string[] CommonDiagnoses =
+    [
+        "Akut apikal periodontitis", "Akut periapikal apse", "Pulpitis", "Perikoronitis", "Diş çekimi sonrası",
+        "İmplant cerrahisi sonrası", "Gingivitis", "Periodontitis", "Alveolit (kuru soket)", "Aftöz stomatit",
+    ];
+
+    private bool loading = true, saving, onBehalf, canEditTemplates, savingTemplate;
+    private List<Dentist> dentists = [];
+    private List<Medication> catalog = [];
+    private List<PrescriptionTemplate> templates = [];
+    private List<string> conditions = [];
+    private string? allergies, diagnosis, notes, error, info, templateName;
+    private int dentistId;
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Today);
+    private List<RxLine> lines = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        dentists = await db.Dentists.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.FullName).ToListAsync();
+        catalog = await db.Medications.AsNoTracking().Where(m => m.IsActive).OrderBy(m => m.Name).ToListAsync();
+        templates = await db.PrescriptionTemplates.AsNoTracking().Include(t => t.Items)
+            .Where(t => t.IsActive).OrderBy(t => t.SortOrder).ThenBy(t => t.Name).ToListAsync();
+        var patient = await db.Patients.AsNoTracking().Where(p => p.Id == PatientId)
+            .Select(p => new
+            {
+                p.PrimaryDentistId,
+                Allergy = p.Anamnesis == null ? null : p.Anamnesis.DrugAllergies,
+                Conditions = p.MedicalConditions.OrderBy(c => c.MedicalCondition.SortOrder).Select(c => c.MedicalCondition.Name).ToList(),
+            })
+            .FirstAsync();
+        allergies = patient.Allergy;
+        conditions = patient.Conditions;
+        canEditTemplates = await Me.IsInAnyRoleAsync(Roles.Admin, Roles.Dentist);
+
+        var mine = await Me.DentistIdAsync();
+        onBehalf = mine is null;
+
+        var sourceId = PrescriptionId ?? CopyFromId;
+        if (sourceId is not null && await db.Prescriptions.AsNoTracking().Include(p => p.Items)
+                .FirstOrDefaultAsync(p => p.Id == sourceId && p.PatientId == PatientId) is { } src)
+        {
+            lines = src.Items.OrderBy(i => i.Id).Select(i => new RxLine
+            {
+                MedicationId = i.MedicationId, Name = i.MedicationName, Dose = i.Dose, Usage = i.Usage, Quantity = i.Quantity,
+            }).ToList();
+            diagnosis = src.Diagnosis;
+            notes = src.Notes;
+            if (PrescriptionId is not null)
+            {
+                date = src.Date;
+                dentistId = src.DentistId;
+            }
+        }
+        if (dentistId == 0)
+            dentistId = mine ?? patient.PrimaryDentistId ?? (dentists.Count == 1 ? dentists[0].Id : 0);
+        loading = false;
+    }
+
+    /// <summary>Adds the template's medicines (skipping ones already on the prescription) and fills empty diagnosis/notes.</summary>
+    private void ApplyTemplate(PrescriptionTemplate t)
+    {
+        var added = 0;
+        foreach (var i in t.Items.OrderBy(i => i.Id))
+        {
+            if (lines.Any(l => string.Equals(l.Name.Trim(), i.MedicationName, StringComparison.CurrentCultureIgnoreCase)))
+                continue;
+            lines.Add(new RxLine { MedicationId = i.MedicationId, Name = i.MedicationName, Dose = i.Dose, Usage = i.Usage, Quantity = i.Quantity });
+            added++;
+        }
+        if (string.IsNullOrWhiteSpace(diagnosis)) diagnosis = t.Diagnosis;
+        if (string.IsNullOrWhiteSpace(notes)) notes = t.Notes;
+        error = null;
+        info = added == 0 ? $"\"{t.Name}\" şablonundaki ilaçlar zaten reçetede." : $"\"{t.Name}\" şablonundan {added} ilaç eklendi.";
+    }
+
+    private void StartTemplate()
+    {
+        info = null;
+        templateName = diagnosis;
+        savingTemplate = true;
+    }
+
+    private async Task SaveAsTemplate()
+    {
+        error = null;
+        lines.RemoveAll(l => string.IsNullOrWhiteSpace(l.Name));
+        if (!canEditTemplates) return;
+        if (string.IsNullOrWhiteSpace(templateName)) { error = "Şablona bir ad verin."; return; }
+        if (lines.Count == 0) { error = "Şablon için en az bir ilaç ekleyin."; return; }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var name = templateName.Trim();
+        if (await db.PrescriptionTemplates.AnyAsync(t => t.Name == name)) { error = "Bu adla bir şablon zaten var."; return; }
+
+        var template = new PrescriptionTemplate
+        {
+            Name = name,
+            Diagnosis = string.IsNullOrWhiteSpace(diagnosis) ? null : diagnosis.Trim(),
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            SortOrder = (await db.PrescriptionTemplates.MaxAsync(t => (int?)t.SortOrder) ?? 0) + 1,
+            Items = lines.Select(l => new PrescriptionTemplateItem
+            {
+                MedicationId = l.MedicationId, MedicationName = l.Name.Trim(), Dose = l.Dose, Usage = l.Usage, Quantity = l.Quantity,
+            }).ToList(),
+        };
+        db.PrescriptionTemplates.Add(template);
+        await db.SaveChangesAsync();
+        templates.Add(template);
+        savingTemplate = false;
+        info = $"\"{name}\" şablon olarak kaydedildi.";
+    }
+
+    private async Task Save(bool print)
+    {
+        error = null;
+        lines.RemoveAll(l => string.IsNullOrWhiteSpace(l.Name));
+        if (dentistId == 0) { error = "Reçetenin hangi hekim adına düzenlendiğini seçin."; return; }
+        if (lines.Count == 0) { error = "En az bir ilaç ekleyin."; return; }
+        if (lines.Any(l => l.Quantity is < 1 or > 20)) { error = "Kutu sayısı 1 ile 20 arasında olmalı."; return; }
+
+        saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var rx = PrescriptionId is { } id
+                ? await db.Prescriptions.Include(p => p.Items).FirstAsync(p => p.Id == id && p.PatientId == PatientId)
+                : new Prescription { PatientId = PatientId, CreatedByUserId = await Me.IdAsync() };
+
+            rx.DentistId = dentistId;
+            rx.Date = date;
+            rx.Diagnosis = string.IsNullOrWhiteSpace(diagnosis) ? null : diagnosis.Trim();
+            rx.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+            rx.Items.Clear();
+            foreach (var l in lines)
+            {
+                var dose = string.IsNullOrWhiteSpace(l.Dose) ? null : l.Dose.Trim();
+                var usage = string.IsNullOrWhiteSpace(l.Usage) ? null : l.Usage.Trim();
+                rx.Items.Add(new PrescriptionItem
+                {
+                    MedicationId = l.MedicationId,
+                    Medication = MedicationLines.NewCatalogEntry(l, dose, usage),
+                    MedicationName = l.Name.Trim(),
+                    Dose = dose,
+                    Usage = usage,
+                    Quantity = l.Quantity,
+                });
+            }
+
+            if (rx.Id == 0) db.Prescriptions.Add(rx);
+            await db.SaveChangesAsync();
+            await Events.NotifyAsync();
+            await OnSaved.InvokeAsync((rx.Id, print));
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

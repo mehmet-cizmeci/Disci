@@ -18,6 +18,12 @@
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        // Close the phone/tablet side menu once a link in it is followed.
+        document.addEventListener('click', e => {
+            if (e.target.closest('.side a')) { const t = document.getElementById('nav-toggle'); if (t) t.checked = false; }
+        });
+    </script>
     <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
 </body>
 

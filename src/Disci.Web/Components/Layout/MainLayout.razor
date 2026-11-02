@@ -1,31 +1,49 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<AuthorizeView>
+    <NotAuthorized>
+        @* Sign-in and other public account pages: centred, without the clinic menu. *@
+        <main class="auth-wrap">@Body</main>
+    </NotAuthorized>
+    <Authorized>
+        @{ var role = Roles.All.FirstOrDefault(context.User.IsInRole); }
+        <div class="shell">
+            @* CSS-only drawer on phones and tablets: the checkbox opens the side menu, the backdrop closes it. *@
+            <input type="checkbox" id="nav-toggle" class="nav-toggle-input" aria-hidden="true" />
+            <aside class="side">
+                <NavMenu />
+            </aside>
+            <label for="nav-toggle" class="side-backdrop" aria-hidden="true"></label>
 
-    <main>
-        <div class="top-row px-4">
-            <AuthorizeView>
-                <Authorized>
-                    <span class="text-secondary small">
-                        @context.User.Identity?.Name
-                        @{ var role = Roles.All.FirstOrDefault(context.User.IsInRole); }
-                        @if (role is not null)
-                        {
-                            <span class="badge text-bg-light border ms-1">@Roles.DisplayName(role)</span>
-                        }
-                    </span>
-                </Authorized>
-            </AuthorizeView>
+            <div class="main">
+                <header class="topbar">
+                    <label for="nav-toggle" class="btn btn-light btn-icon nav-toggle" title="Menü"><Icon Name="menu" /></label>
+                    <form action="hastalar" method="get" class="topbar-search" role="search">
+                        <div class="input-icon">
+                            <Icon Name="search" />
+                            <input name="ara" class="form-control" placeholder="Hasta ara: ad, telefon, protokol no" aria-label="Hasta ara" autocomplete="off" />
+                        </div>
+                    </form>
+                    <div class="topbar-actions">
+                        <a href="randevular?yeni=1" class="btn btn-primary d-none d-md-inline-flex"><Icon Name="calendar-plus" /> Randevu</a>
+                        <NotificationBell @rendermode="InteractiveServer" />
+                        <a href="Account/Manage" class="user-chip text-body" title="Hesabım">
+                            <span class="avatar avatar-sm">@Display.Initials(context.User.Identity?.Name)</span>
+                            <span class="who">
+                                @context.User.Identity?.Name
+                                <small>@(role is null ? "" : Roles.DisplayName(role))</small>
+                            </span>
+                        </a>
+                    </div>
+                </header>
+
+                <article class="content">
+                    @Body
+                </article>
+            </div>
         </div>
-
-        <article class="content px-3 px-md-4">
-            @Body
-        </article>
-    </main>
-</div>
+    </Authorized>
+</AuthorizeView>
 
 <div id="blazor-error-ui" data-nosnippet>
     Beklenmeyen bir hata oluştu.

@@ -1,4 +1,4 @@
-# Disci
+﻿# Disci
 
 DentaLineSuit'in yerini alacak diş kliniği otomasyonu. Hedef mimari ve modüller [Yapilacak.md](Yapilacak.md) dosyasında.
 
@@ -12,7 +12,11 @@ Bu aşamada hazır olanlar (**Adım 1**):
 
 - ASP.NET Core Blazor web uygulaması (bilgisayar, tablet, telefon tarayıcısı)
 - Kullanıcı girişi (ASP.NET Core Identity, çerez) ve roller: Yönetici, Hekim, Asistan
-- Ekranlar: ana sayfa, hasta listesi/arama, hasta kartı (tedaviler, ödemeler, bakiye, anamnez, notlar, fotoğraflar), kullanıcı yönetimi
+- Ekranlar: **Bugün** (resepsiyon panosu, bekleme salonu), **randevu takvimi** (gün/hafta, çakışma kontrolü),
+  hasta listesi/arama, **yeni hasta / düzenleme / arşiv**, hasta kartı (hesap ekstresi, diş şeması, tedavi planı,
+  ödeme alma, makbuz, anamnez, notlar, fotoğraflar), **reçete** (hekim adına yazma, alerji uyarısı, şablonlar, A5 çıktı,
+  ilaç listesi), **bildirimler ve görevler**, **kasa raporu**, **fiyat listeleri**,
+  klinik ayarları, kullanıcı yönetimi
 
 ## Proje yapısı
 
@@ -45,6 +49,29 @@ Herkese açık "kayıt ol" sayfası yoktur; hesapları yalnızca yönetici açar
 
 > Dikkat: aktarım programını `--reset` ile çalıştırmak veritabanını sildiği için kullanıcı hesaplarını da siler.
 > Uygulama yeniden açıldığında ilk yönetici user-secrets'tan tekrar oluşturulur.
+
+## Klinik bilgisayarına kurulum
+
+Program, sürekli açık kalacak bir klinik bilgisayarında Windows hizmeti olarak çalışır.
+
+1. Geliştirme bilgisayarında paketi oluşturun (testleri çalıştırır, programı .NET gerektirmeyecek şekilde derler):
+
+   ```
+   powershell -ExecutionPolicy Bypass -File deploy\paket-olustur.ps1
+   ```
+
+2. `dist\Disci-Kurulum-*.zip` dosyasını klinik bilgisayarına kopyalayıp açın ve **KUR.bat**'ı çalıştırın.
+
+Kurulum betiği SQL Server Express'i kurar, programı "Disci Klinik Programı" hizmeti olarak kaydeder, HTTPS sertifikası
+oluşturur, güvenlik duvarını ayarlar, eski verileri aktarır, ilk yöneticiyi açar ve gece yedeğini zamanlar.
+Ayrıntılar ve sertifikanın tablet/telefonlara kurulumu: [deploy/kurulum/OKUBENI.md](deploy/kurulum/OKUBENI.md).
+`KUR.bat -Deneme` hiçbir şeyi değiştirmeden yapılacakları gösterir.
+
+| Betik (hedefte `C:\Disci\betikler`) | Görev |
+|---|---|
+| `veri-aktar.ps1` | Geçiş günü: yedek alır, verileri ve kullanıcıları silip DentaLineSuit'ten yeniden aktarır |
+| `yedekle.ps1` | Veritabanı yedeği + fotoğraf kopyası (gece görevi bunu çalıştırır) |
+| `kaldir.ps1` | Hizmeti, güvenlik duvarı kurallarını ve yedek görevini kaldırır; verilere dokunmaz |
 
 ## Testler
 

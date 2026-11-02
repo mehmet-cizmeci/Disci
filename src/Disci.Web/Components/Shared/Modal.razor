@@ -1,0 +1,24 @@
+@* A light modal for interactive pages: rendered only while open, closes on the X button or Escape. *@
+<div class="modal-x-backdrop" @onkeydown="OnKey" tabindex="-1">
+    <div class="modal-x @(Wide ? "wide" : "")" role="dialog" aria-modal="true" aria-label="@Title">
+        <div class="modal-x-head">
+            <h2>@Title</h2>
+            <button type="button" class="btn btn-light btn-sm btn-icon" title="Kapat" @onclick="OnClose"><Icon Name="x" /></button>
+        </div>
+        <div class="modal-x-body">@ChildContent</div>
+        @if (Footer is not null)
+        {
+            <div class="modal-x-foot">@Footer</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public bool Wide { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task OnKey(KeyboardEventArgs e) => e.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+}

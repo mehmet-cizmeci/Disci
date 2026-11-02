@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Disci.Domain;
 using Disci.Infrastructure;
@@ -24,12 +24,18 @@ public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLife
 
     public TestData Data { get; private set; } = default!;
 
+    /// <summary>"Development" serves static web assets (blazor.web.js) the way `dotnet run` does.</summary>
+    public string EnvironmentName { get; init; } = "Testing";
+
     private string ConnectionString =>
         $@"Server=(localdb)\MSSQLLocalDB;Database={_database};Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(EnvironmentName);
+        // Never create the real first administrator (user-secrets) in a test database.
+        builder.UseSetting("Seed:AdminEmail", "");
+        builder.UseSetting("Seed:AdminPassword", "");
         builder.UseSetting("ConnectionStrings:DefaultConnection", ConnectionString);
         builder.UseSetting("FileStorage:Root", _filesRoot);
         builder.UseSetting("Database:MigrateOnStartup", "true");
@@ -71,7 +77,7 @@ public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLife
 }
 
 /// <summary>Invented patients, treatments and payments; nothing here comes from a real clinic.</summary>
-public sealed record TestData(int PatientId, string LastName, int PhotoId, int PatientCount)
+public sealed record TestData(int PatientId, string LastName, int PhotoId, int PatientCount, int DentistId, int PaymentId, int TomorrowAppointmentId, int PrescriptionId)
 {
     public static async Task<TestData> SeedAsync(DisciDbContext db, string filesRoot)
     {
@@ -95,7 +101,8 @@ public sealed record TestData(int PatientId, string LastName, int PhotoId, int P
             Dentist = dentist,
             Items = [new TreatmentItem { Procedure = procedure, Description = "Deneme dolgu", ToothNumber = 16, Price = 1500 }],
         });
-        main.Payments.Add(new Payment { Date = today.AddDays(-3), Method = PaymentMethod.Cash, Amount = 1000 });
+        main.Payments.Add(new Payment { Date = today, Method = PaymentMethod.Cash, Amount = 1000 });
+        main.Anamnesis = new Anamnesis { DrugAllergies = "Penisilin" };
         main.Photos.Add(new PatientPhoto { TakenOn = today, Kind = PhotoKind.IntraOral, FilePath = "patients/test/photo.jpg" });
 
         var others = new[]
@@ -104,7 +111,37 @@ public sealed record TestData(int PatientId, string LastName, int PhotoId, int P
             new Patient { FirstName = "Arşiv", LastName = "KAYDI", RegisteredOn = today, IsArchived = true },
         };
 
-        db.AddRange(main, others[0], others[1]);
+        var priceList = new PriceList { Name = "Deneme tarifesi", IsDefault = true };
+        priceList.Items.Add(new PriceListItem { Procedure = procedure, BasePrice = 1500, Price = 1500 });
+
+        // Tomorrow 10:00, not yet confirmed: should appear on the confirmation-call list.
+        var tomorrow = new Appointment
+        {
+            Patient = main,
+            Dentist = dentist,
+            Start = DateTime.Today.AddDays(1).AddHours(10),
+            End = DateTime.Today.AddDays(1).AddHours(10).AddMinutes(30),
+        };
+        var overdueTask = new Reminder { Title = "Deneme görevi: laboratuvarı ara", DueDate = today.AddDays(-1), Patient = main };
+
+        var medication = new Medication { Name = "Deneme Amoksisilin", Dose = "1000 mg", Usage = "Günde 2 kez 1 tablet" };
+        var prescription = new Prescription
+        {
+            Patient = main,
+            Dentist = dentist,
+            Date = today,
+            Diagnosis = "Deneme tanısı",
+            Items = [new PrescriptionItem { Medication = medication, MedicationName = medication.Name, Dose = medication.Dose, Usage = medication.Usage, Quantity = 2 }],
+        };
+
+        var template = new PrescriptionTemplate
+        {
+            Name = "Deneme şablonu",
+            Diagnosis = "Deneme şablon tanısı",
+            Items = [new PrescriptionTemplateItem { Medication = medication, MedicationName = medication.Name, Dose = medication.Dose, Quantity = 1 }],
+        };
+
+        db.AddRange(main, others[0], others[1], priceList, tomorrow, overdueTask, prescription, template);
         await db.SaveChangesAsync();
 
         // A tiny valid JPEG header is enough for the file endpoint test.
@@ -112,7 +149,7 @@ public sealed record TestData(int PatientId, string LastName, int PhotoId, int P
         Directory.CreateDirectory(Path.GetDirectoryName(photoPath)!);
         await File.WriteAllBytesAsync(photoPath, [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0xFF, 0xD9]);
 
-        return new TestData(main.Id, main.LastName, main.Photos[0].Id, PatientCount: 2);
+        return new TestData(main.Id, main.LastName, main.Photos[0].Id, PatientCount: 2, dentist.Id, main.Payments[0].Id, tomorrow.Id, prescription.Id);
     }
 }
 
@@ -123,8 +160,11 @@ public sealed class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions>
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue(DisciWebFactory.RoleHeader, out var role))
+        // The header is for HttpClient tests; the cookie lets a browser drive the test server by hand.
+        if (!Request.Headers.TryGetValue(DisciWebFactory.RoleHeader, out var role)
+            && !Request.Cookies.TryGetValue("test-role", out var cookieRole))
             return Task.FromResult(AuthenticateResult.NoResult());
+        if (string.IsNullOrEmpty(role)) role = Request.Cookies["test-role"];
 
         var identity = new ClaimsIdentity(
         [

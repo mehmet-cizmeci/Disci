@@ -3,7 +3,7 @@
 Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kadar yapılanları, alınan kararları ve
 öğrenilen tuzakları anlatır. Bu projede çalışacak bir yapay zeka asistanı veya geliştirici önce bu dosyayı okumalı.
 
-- Son güncelleme: 2026-11-01
+- Son güncelleme: 2026-11-02
 - Hedefler ve istenen modüller: [Yapilacak.md](Yapilacak.md)
 - Kurulum ve komutlar: [README.md](README.md)
 - Son kullanıcı belgesi: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md)
@@ -143,9 +143,50 @@ Ayrıntılı sayılar ve tutarlar yalnızca yerel rapordadır: `data/reports/akt
 
 - Adres: `http://localhost:5111` (`dotnet run --project src/Disci.Web`)
 - Roller: `Admin` (Yönetici), `Hekim`, `Asistan`. Sayfalar varsayılan olarak girişe kapalı (`Pages/_Imports.razor` içinde `[Authorize]`).
-- Ekranlar: `/` ana sayfa, `/hastalar`, `/hastalar/{id}`, `/yonetim/kullanicilar` (yalnızca Admin), `/files/photos/{id}` (girişe kapalı fotoğraf adresi).
+- Ekranlar (2026-11-02 yeniden tasarım; örnek alınanlar: Dentally, Software of Excellence, Carestream Sensei, dentsoft.com.tr):
+  - `/` **Bugün**: resepsiyon panosu. Günün randevuları tek tıkla durum akışıyla (Randevulu → Teyitli → Geldi → Koltukta → Tamamlandı; ayrıca Gelmedi/İptal), bekleme salonu sayacı, borçlu hasta etiketi, yapılacaklar özeti
+  - `/randevular`: gün (hekim sütunları) ve hafta görünümü, boş saate tıklayınca randevu, çakışma kontrolü (aynı hekim veya aynı hasta), kayıtsız (misafir) hasta, WhatsApp hatırlatma bağlantısı. Hekim rolü kendi sütunuyla açılır. `?hasta=ID` ile hasta seçili açılır
+  - `/hastalar` (Aktif/Borçlu/Arşiv/Tümü süzgeci, kalan borç sütunu), `/hastalar/yeni`, `/hastalar/{id}/duzenle` (benzer kayıt uyarısı, anamnez uyarıları, tarife, sabit indirim)
+  - `/hastalar/{id}`: sağlık uyarıları (kırmızı), hesap özeti (toplam ücret / alınan / kalan + ilerleme çubuğu), sekmeler: Hesap (borç-ödeme ekstresi, yürüyen bakiye, makbuz, ödeme iptali), Tedaviler (FDI diş şeması, plan → "yapıldı say", plandan çıkar), Randevular, Bilgiler, Anamnez, Notlar (not ekleme), Fotoğraflar. Arşive kaldır/çıkar
+  - `/bildirimler`: hesaplanan bildirimler (bekleyen, geciken, yarın teyit edilecek, bugün gelen borçlu, görevler, doğum günü, 6 ay kontrol/recall) + görev (Reminder) ekleme/tamamlama. Üst çubuktaki zil aynı listeden "acil" olanları sayar
+  - `/kasa` (Admin, Hekim): tarih aralığı, tahsilat/tedavi/gider/net, ödeme şekline ve hekime göre dağılım, günlük döküm, en yüksek alacaklar
+  - `/fiyatlar` (Admin, Hekim): liste seçimi, hücrede fiyat düzenleme (KDV dahil girilir, net ve KDV payı listenin oranından), toplu % güncelleme (tam liraya yuvarlar), liste kopyalama, varsayılan liste, yeni işlem
+  - `/ayarlar` (Admin): hekimler (renk, mesai saatleri, etkin) ve randevu türleri (süre, renk)
+  - Reçete (2026-11-02): hasta kartında "Reçete yaz" (`Shared/PrescriptionEditor.razor`), "Reçeteler" sekmesi (yazdır, aynısını yeniden yaz, düzenle; silme yalnızca Admin/Hekim), `/receteler` (yazılan reçeteler: tarih/hekim/arama süzgeci, "yazan" ve "hekim adına" etiketi; İlaç listesi sekmesinde katalog yönetimi), `/recete/{id}` yazdırma sayfası (A5, `?yazdir=1` yüklenince yazdırma penceresini açar)
+  - `/makbuz/{odemeId}`: yazdırılabilir tahsilat makbuzu, tutar yazıyla. Başlık `Clinic:Name/Address/Phone` ayarlarından
+  - `/yonetim/kullanicilar` (Admin), `/files/photos/{id}`
+- Tasarım: Bootstrap ızgarası üstüne kendi tasarım dili (`wwwroot/app.css`, renk değişkenleri `:root`'ta, durum renkleri `.st-*`). İkonlar `Shared/Icon.razor` içinde satır içi SVG (klinik ağı internetsiz olabilir diye CDN yok). Telefon/tablette menü CSS'li çekmece.
+- Ortak parçalar: `Services/ClinicServices.cs` (`ClinicEvents` anlık yenileme yayını, `CurrentUser`, `Ledger` bakiye sorguları, `Scheduling` çakışma ve durum kuralları), `Services/Notifications.cs`, `Services/PatientSearch.cs`; bileşenler `Shared/` (Modal, Kpi, StatusBadge, PatientPicker, ToothChart, AppointmentEditor, TreatmentEditor, PaymentEditor, Toast).
+- Anlık yenileme: bir bilgisayarda hasta "Geldi" yapılınca/ödeme alınınca `ClinicEvents.NotifyAsync()` bütün açık ekranları (pano, takvim, zil, hasta kartı) yeniler. Zil ve pano ayrıca dakikada bir kendini yeniler (gecikme/bekleme süreleri).
+- Yetki: Asistan randevu, hasta kaydı, tedavi/ödeme girişi yapabilir; ödeme iptali, kasa ve fiyat listeleri yalnızca Admin/Hekim; ayarlar yalnızca Admin. Ödeme silinmez, iptal edilir (üstü çizili).
+- Reçete kuralları: reçete her zaman bir hekim adına düzenlenir (`DentistId` zorunlu); yazan kullanıcı `CreatedByUserId`'de. Asistanın kendi hekim kaydı olmadığından pencerede "hekim adına" notu çıkar. Kalemler ilaç listesinden (`MedicationId` dolu) ya da serbest metinle eklenir; serbest ilaç istenirse kataloğa da eklenir. Eski sistemden 27 ilaçlık katalog (DLILAC) gelmişti, reçete yoktu.
+- Alerji güvenlik ağı: `Services/Prescriptions.cs` → `PrescriptionSafety.AllergyWarnings` hastanın ilaç alerjisi metnini ilaç adıyla karşılaştırır (penisilin, sefalosporin, NSAID, aspirin, metamizol, klindamisin, metronidazol, lokal anestezik ve sülfa aileleri + birebir kelime). Bir ilaç veritabanı değildir; yalnızca uyarır, kaydı engellemez. "Yok", "Hayır" gibi değerler alerji sayılmaz (`IsAllergy`); hasta kartı başlığındaki alerji etiketleri de bunu kullanır.
+- E-Reçete (Medula) entegrasyonu yok; reçete kâğıda yazdırılır.
+- Reçete şablonları (2026-11-02): `PrescriptionTemplate` + `PrescriptionTemplateItem` (migration `PrescriptionTemplates`; kalem şablonla birlikte silinir, ilaç bağı Restrict). Reçete penceresinde "Şablondan ekle" düğmeleri (aynı adlı ilacı ikinci kez eklemez, tanı/not boşsa doldurur; hastanın alerjisine uyan ilaç içeren şablon kırmızı görünür) ve "Şablon olarak kaydet". `/receteler?sekme=sablon`: kartlar, sıralama (öne/sona al), düzenleme, pasif, silme. Şablonları yalnızca Admin/Hekim düzenler; asistan kullanır. Örnek şablonlar (`PrescriptionTemplates.Examples`, genel ilaç adları, yetişkin dozları) kendiliğinden yüklenmez; liste boşken "Örnek şablonları ekle" ile, onaydan sonra eklenir ve aynı adlı katalog ilacına bağlanır. İlaç satırı düzenleyicisi reçete ve şablonda ortak: `Shared/MedicationLines.razor` (`RxLine`).
+- Plan → yapıldı: seçilen plan kalemleri bugünün tarihli yeni bir "Yapıldı" seansına taşınır (kalem kimliği korunur), boş kalan plan seansı silinir (eski sistemden gelenler hariç).
+- Migration `ClinicWorkflow`: `Appointments.ArrivedAt`, `Reminders` tablosu; `AppointmentStatus.InChair = 7` (int, şema değişmez). Uygulama açılışta kendisi uygular.
 - Kayıt sayfası kaldırıldı. Hatalı parola denemeleri hesabı kilitliyor. Devre dışı bırakılan hesaba süresiz kilit konup güvenlik damgası yenileniyor.
 - İlk yönetici `IdentitySeeder` tarafından yalnızca `Seed:AdminEmail` / `Seed:AdminPassword` ayarlarından açılıyor. Bu bilgisayarda bunlar **user-secrets** içinde (`admin@disci.local`, parola rastgele). Yapay zekanın bu parolayı okumasına izin verilmedi; doğrulama bu yüzden test kimliğiyle yapıldı.
+
+### Klinik bilgisayarına kurulum (`deploy/`)
+
+Kullanıcının bu bilgisayarı yalnızca geliştirme içindir; program başka bir (klinik) bilgisayarda sürekli çalışacak.
+
+- `deploy/paket-olustur.ps1`: testleri çalıştırır, web uygulamasını ve aktarım aracını **self-contained win-x64** yayınlar
+  (hedefe .NET kurulmaz), `deploy/kurulum/*` ile birlikte `dist/Disci-Kurulum-*.zip` yapar (~107 MB, Git'e girmez).
+- `deploy/kurulum/kur.ps1` (KUR.bat ile yönetici olarak): SQL Server Express (winget, önce 2025 sonra 2022, örnek `.\SQLEXPRESS`),
+  `C:\Disci\app` + `import` + `betikler`, `C:\DisciVeri\{files,keys,Yedekler,sertifika,reports}`, Windows hizmeti `Disci`
+  (hesap `NT SERVICE\Disci`, gecikmeli otomatik, SQL'e bağımlı, hata olursa yeniden başlar), kendinden imzalı sertifika
+  (LocalMachine\My, FriendlyName "Disci", bilgisayar adı + IP'ler), `appsettings.Production.json` (Kestrel HTTP 5111 / HTTPS 5443),
+  SQL yetkileri (hizmet hesabı yalnızca `Disci` db_owner; SYSTEM db_backupoperator), güvenlik duvarı (Özel/Etki alanı),
+  ilk yönetici (hizmetin kayıt defterindeki geçici `Environment` değişkenleriyle, sonra silinir), gece yedeği görevi (23:30, SYSTEM).
+- `-Deneme` her betikte değişiklik yapmadan çalışır. Tamamlanan adımlar tekrar çalıştırılınca zarar vermez (güncelleme de aynı betikle).
+- Program tarafı: `UseWindowsService`, yayınlanmış kopyada içerik kökü exe klasörü (hizmet System32'de başlar),
+  `DataProtection:KeysPath` ile oturum anahtarları diske (DPAPI-makine korumalı).
+
+**Test durumu:** Paket oluşturma, yayınlanan programın System32'den Production modunda çalışması (sayfalar, CSS/JS, erişim kuralları),
+betiklerin sözdizimi, `kur.ps1 -Deneme` ve SQL işlevleri/yedek alma (LocalDB'ye karşı) denendi. **Gerçek bir hedef bilgisayarda
+tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesabı, LocalMachine sertifikası ve HTTPS uç noktası orada ilk kez çalışacak.
 
 ## Öğrenilen tuzaklar
 
@@ -156,6 +197,19 @@ Ayrıntılı sayılar ve tutarlar yalnızca yerel rapordadır: `data/reports/akt
 - `UseStatusCodePagesWithReExecute` ile `/not-found` sayfası için `UseAuthentication/UseAuthorization` açıkça çağrılmalı.
 - Aktarımı `--reset` ile çalıştırmak veritabanını, **kullanıcı hesapları dahil**, siler.
 - Uygulama içi tarayıcı önizlemesi `launch.json`'u oturum klasöründe (`C:\Yazılım\DentaLineSuit\.claude\launch.json`) arıyor.
+- Yayınlanmış program başka bir klasörden başlatılırsa (ör. hizmet, System32) içerik kökü yanlış olur ve CSS/JS **200 ama 0 bayt** döner; `Program.cs` bunu içerik kökünü exe klasörüne sabitleyerek çözüyor.
+- 2026-11-02: Hasta listesinde arama, sıralama ve (ardından) hasta kartı sekmeleri çalışmıyordu. Neden: QuickGrid tek, uzun ömürlü bir DbContext'e bağlıydı; her harfte yeni sorgu öncekiyle çakışınca "A second operation was started on this context instance" hatası Blazor bağlantısını (circuit) sonlandırıyordu. Çözüm: `ItemsProvider` ile her istekte `IDbContextFactory`'den yeni bağlam; eski istekler iptal belirteciyle düşüyor. Geliştirmede `DetailedErrors` açık. Tarayıcıda denemek için `BrowserTestServer` yardımcısı eklendi.
+- 2026-11-02: LocalDB 17.0'a güncellenince `MSSQLLocalDB` örneği `Disci` veritabanını unuttu; açılışta "Cannot create file ...Disci.mdf because it already exists" hatası çıktı. Dosyalar sağlamdı; yedeklenip (`data/db-yedek-20261102`) `CREATE DATABASE [Disci] ON (FILENAME=...mdf),(FILENAME=...ldf) FOR ATTACH` ile geri bağlandı. Dosyaları silmeyin.
+- PowerShell 5.1'de `Add-Content`/`Set-Content` varsayılan olarak ANSI yazar; Türkçe içerikli dosyalara `[IO.File]::WriteAllText(..., UTF8Encoding)` ile yazın.
+- Yapay zekanın programı ağa açması (0.0.0.0'a bağlama) ve gizli parolayı okuması izin sınıflandırıcısı tarafından engellendi; bu işler kullanıcıya bırakılır.
+- Razor'da satır içi stile `double` yazarken Türkçe kültür ondalık virgül koyar (`top:12,5px` geçersiz CSS, öğe en üste kayar). `Calendar.razor`'daki `Px()` gibi değişmez kültürle biçimleyin.
+- Etkileşimli sayfada `NavigationManager.NavigateTo` önceden işleme (prerender) sırasında çağrılırsa yönlendirmeye dönüşür; `RendererInfo.IsInteractive` ile koruyun.
+- EF, kurucuyla oluşturulan (positional record) projeksiyonların alanlarına sonradan `Where`/`OrderBy` uygulayamaz; `Ledger.Balances` bu yüzden üye atamalı sınıf (`PatientBalance`) döndürüyor ve sorgularda `Charged - Paid` kullanılıyor.
+- `type="time"` girdisi `TimeOnly` bağlamada saniyeyi de gösterir; `@bind:format="HH:mm"` verin.
+- Türkçe küçük harfe çevirme "NSAID"i "nsaıd" yapar (noktasız ı); metin karşılaştırmalarında ı ve i'yi eşitleyin (`PrescriptionSafety.Fold`).
+- CSS adlandırılmış sayfa (`@page rx { size: A5 }`) yalnızca öğeye verilirse, ardından gelen öğeler varsayılan boyutta ikinci bir sayfaya taşar; `body:has(.rx-sheet) { page: rx }` ile bütün belgeye verin.
+- Alt bileşen, üst bileşenden aldığı listeyi değiştirirse üst bileşen kendiliğinden yeniden çizilmez (ör. "Şablon olarak kaydet" düğmesi pasif kalıyordu); değişiklikten sonra bir `EventCallback` (`MedicationLines.OnChanged`) çağırın.
+- Tarayıcı otomasyon aracı yoksa ekran görüntüsü için: `BrowserTestServer`'ı çalıştırıp Chrome'u `--headless=new --remote-debugging-port` ile açan küçük bir Node (yerleşik WebSocket, CDP) betiği yeterli; `test-role` çerezi `Network.setCookie` ile verilir. Sunucuyu zorla kapatmak `Disci_Tests_*` veritabanını arkada bırakır, elle silin.
 
 ## Açık sorular (kullanıcıya sorulacak)
 
@@ -167,7 +221,11 @@ Ayrıntılı sayılar ve tutarlar yalnızca yerel rapordadır: `data/reports/akt
 
 ## Sıradaki işler
 
-- Hasta ekleme/düzenleme; tedavi ve ödeme girişi
-- Randevu takvimi (hekim bazlı, çakışma kontrolü), reçete modülü (asistan hekim adına yazabilir)
+- ~~Hasta ekleme/düzenleme; tedavi ve ödeme girişi; randevu takvimi; bildirimler~~ (2026-11-02 yapıldı)
+- Gerçek veriyle performans kontrolü (5.227 hasta): hasta listesindeki bakiye sütunu ve "Toplam alacak" alt sorgularla hesaplanıyor
+- ~~Reçete modülü~~ (2026-11-02 yapıldı); E-Reçete entegrasyonu; ~~reçete şablonları~~ (2026-11-02 yapıldı)
+- Taksit/senet planı; gider girişi ekranı
+- SMS / WhatsApp Business ile otomatik hatırlatma (şimdilik yalnızca tek tıkla açılan wa.me bağlantısı var; mesajı kişi gönderir)
+- Klinik adı/adresi için ayar ekranı (şimdilik `appsettings.json` → `Clinic`)
 - Ağdan erişim (tablet/telefon), gerekirse JWT'li API
 - Git deposu (henüz yok; `.gitignore` hazır, `data/` asla depoya girmemeli)

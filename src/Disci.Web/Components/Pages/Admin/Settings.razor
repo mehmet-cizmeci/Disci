@@ -1,0 +1,200 @@
+@page "/ayarlar"
+@attribute [Authorize(Roles = Roles.Admin)]
+@rendermode InteractiveServer
+@inject IDbContextFactory<DisciDbContext> DbFactory
+
+<PageTitle>Klinik ayarları - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Klinik ayarları</h1>
+        <div class="sub">Hekimler, çalışma saatleri ve randevu türleri</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="panel panel-flush">
+            <div class="panel-head">
+                <Icon Name="users" /><h2>Hekimler</h2>
+                <div class="actions"><button class="btn btn-sm btn-primary" @onclick="NewDentist"><Icon Name="plus" Class="ico-sm" /> Hekim ekle</button></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead><tr><th>Hekim</th><th>Uzmanlık</th><th>Çalışma saati</th><th>Durum</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var d in dentists)
+                        {
+                            <tr class="@(d.IsActive ? "" : "text-secondary")">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="avatar avatar-sm" style="background:@Display.Color(d.CalendarColor, d.Id);color:#fff">@Display.Initials(d.FullName)</span>
+                                        <span class="fw-650">@d.FullName</span>
+                                    </div>
+                                </td>
+                                <td>@d.Specialty</td>
+                                <td class="tabular">@d.WorkStart?.ToString("HH:mm") – @d.WorkEnd?.ToString("HH:mm")</td>
+                                <td>@(d.IsActive ? "Etkin" : "Pasif")</td>
+                                <td class="text-end"><button class="btn btn-sm btn-light btn-icon" title="Düzenle" @onclick="() => dentist = Clone(d)"><Icon Name="edit" Class="ico-sm" /></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="panel panel-flush">
+            <div class="panel-head">
+                <Icon Name="calendar" /><h2>Randevu türleri</h2>
+                <div class="actions"><button class="btn btn-sm btn-primary" @onclick="NewType"><Icon Name="plus" Class="ico-sm" /> Tür ekle</button></div>
+            </div>
+            @if (types.Count == 0)
+            {
+                <div class="empty py-4">Muayene, dolgu, kanal tedavisi gibi türler ekleyin; randevu süresi kendiliğinden gelir.</div>
+            }
+            else
+            {
+                <div class="list">
+                    @foreach (var t in types)
+                    {
+                        <div class="list-row @(t.IsActive ? "" : "text-secondary")">
+                            <span class="notice-dot" style="background:@(t.Color ?? "#94a3b8")"></span>
+                            <span class="grow title">@t.Name</span>
+                            <span class="meta">@t.DurationMinutes dk</span>
+                            <button class="btn btn-sm btn-light btn-icon" title="Düzenle" @onclick="() => type = CloneType(t)"><Icon Name="edit" Class="ico-sm" /></button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (dentist is not null)
+{
+    <Modal Title="@(dentist.Id == 0 ? "Hekim ekle" : "Hekimi düzenle")" OnClose="() => dentist = null">
+        <ChildContent>
+            <div class="row g-3">
+                <div class="col-sm-8"><label class="form-label" for="d-name">Ad soyad</label><input id="d-name" class="form-control" @bind="dentist.FullName" /></div>
+                <div class="col-sm-4"><label class="form-label" for="d-color">Takvim rengi</label><input id="d-color" type="color" class="form-control form-control-color w-100" @bind="dentistColor" /></div>
+                <div class="col-sm-6"><label class="form-label" for="d-spec">Uzmanlık</label><input id="d-spec" class="form-control" @bind="dentist.Specialty" /></div>
+                <div class="col-sm-6"><label class="form-label" for="d-dip">Diploma no</label><input id="d-dip" class="form-control" @bind="dentist.DiplomaNo" /></div>
+                <div class="col-sm-6"><label class="form-label" for="d-phone">Telefon</label><input id="d-phone" class="form-control" @bind="dentist.Phone" /></div>
+                <div class="col-sm-6"><label class="form-label" for="d-mail">E-posta</label><input id="d-mail" class="form-control" @bind="dentist.Email" /></div>
+                <div class="col-6"><label class="form-label" for="d-ws">Mesai başlangıcı</label><input id="d-ws" type="time" class="form-control" @bind="dentist.WorkStart" @bind:format="HH:mm" /></div>
+                <div class="col-6"><label class="form-label" for="d-we">Mesai bitişi</label><input id="d-we" type="time" class="form-control" @bind="dentist.WorkEnd" @bind:format="HH:mm" /></div>
+                <div class="col-12 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" id="d-active" @bind="dentist.IsActive" /><label class="form-check-label" for="d-active">Etkin (takvimde görünür)</label></div>
+            </div>
+            @if (error is not null) { <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div> }
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => dentist = null">Vazgeç</button>
+            <button class="btn btn-primary" @onclick="SaveDentist"><Icon Name="check" /> Kaydet</button>
+        </Footer>
+    </Modal>
+}
+
+@if (type is not null)
+{
+    <Modal Title="@(type.Id == 0 ? "Randevu türü ekle" : "Randevu türünü düzenle")" OnClose="() => type = null">
+        <ChildContent>
+            <div class="row g-3">
+                <div class="col-sm-8"><label class="form-label" for="t-name">Ad</label><input id="t-name" class="form-control" @bind="type.Name" /></div>
+                <div class="col-sm-4"><label class="form-label" for="t-dur">Süre (dk)</label><input id="t-dur" type="number" min="5" step="5" class="form-control" @bind="type.DurationMinutes" /></div>
+                <div class="col-sm-4"><label class="form-label" for="t-color">Renk</label><input id="t-color" type="color" class="form-control form-control-color w-100" @bind="typeColor" /></div>
+                <div class="col-sm-8 d-flex align-items-end"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="t-active" @bind="type.IsActive" /><label class="form-check-label" for="t-active">Etkin</label></div></div>
+            </div>
+            @if (error is not null) { <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div> }
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => type = null">Vazgeç</button>
+            <button class="btn btn-primary" @onclick="SaveType"><Icon Name="check" /> Kaydet</button>
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private List<Dentist> dentists = [];
+    private List<AppointmentType> types = [];
+    private Dentist? dentist;
+    private AppointmentType? type;
+    private string? error;
+
+    private string dentistColor
+    {
+        get => dentist is null ? "#0d9488" : Display.Color(dentist.CalendarColor, dentist.Id);
+        set { if (dentist is not null) dentist.CalendarColor = value; }
+    }
+
+    private string typeColor
+    {
+        get => type?.Color ?? "#0d9488";
+        set { if (type is not null) type.Color = value; }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        dentists = await db.Dentists.AsNoTracking().OrderByDescending(d => d.IsActive).ThenBy(d => d.FullName).ToListAsync();
+        types = await db.AppointmentTypes.AsNoTracking().OrderByDescending(t => t.IsActive).ThenBy(t => t.Name).ToListAsync();
+    }
+
+    private void NewDentist() => dentist = new Dentist { FullName = "", WorkStart = new(9, 0), WorkEnd = new(18, 0) };
+
+    private void NewType() => type = new AppointmentType { Name = "", DurationMinutes = 30 };
+
+    private static Dentist Clone(Dentist d) => new()
+    {
+        Id = d.Id, FullName = d.FullName, Specialty = d.Specialty, DiplomaNo = d.DiplomaNo, Phone = d.Phone, Email = d.Email,
+        WorkStart = d.WorkStart, WorkEnd = d.WorkEnd, CalendarColor = d.CalendarColor, IsActive = d.IsActive,
+    };
+
+    private static AppointmentType CloneType(AppointmentType t) => new()
+    {
+        Id = t.Id, Name = t.Name, DurationMinutes = t.DurationMinutes, Color = t.Color, IsActive = t.IsActive,
+    };
+
+    private async Task SaveDentist()
+    {
+        error = null;
+        if (dentist is null) return;
+        if (string.IsNullOrWhiteSpace(dentist.FullName)) { error = "Ad soyad gerekli."; return; }
+        if (dentist.WorkStart >= dentist.WorkEnd) { error = "Mesai bitişi başlangıçtan sonra olmalı."; return; }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var d = dentist.Id == 0 ? db.Dentists.Add(new Dentist { FullName = "" }).Entity : await db.Dentists.FirstAsync(x => x.Id == dentist.Id);
+        d.FullName = dentist.FullName.Trim();
+        d.Specialty = dentist.Specialty;
+        d.DiplomaNo = dentist.DiplomaNo;
+        d.Phone = dentist.Phone;
+        d.Email = dentist.Email;
+        d.WorkStart = dentist.WorkStart;
+        d.WorkEnd = dentist.WorkEnd;
+        d.CalendarColor = dentist.CalendarColor;
+        d.IsActive = dentist.IsActive;
+        await db.SaveChangesAsync();
+        dentist = null;
+        await Load();
+    }
+
+    private async Task SaveType()
+    {
+        error = null;
+        if (type is null) return;
+        if (string.IsNullOrWhiteSpace(type.Name)) { error = "Ad gerekli."; return; }
+        if (type.DurationMinutes is < 5 or > 480) { error = "Süre 5 ile 480 dakika arasında olmalı."; return; }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var t = type.Id == 0 ? db.AppointmentTypes.Add(new AppointmentType { Name = "" }).Entity : await db.AppointmentTypes.FirstAsync(x => x.Id == type.Id);
+        t.Name = type.Name.Trim();
+        t.DurationMinutes = type.DurationMinutes;
+        t.Color = type.Color;
+        t.IsActive = type.IsActive;
+        await db.SaveChangesAsync();
+        type = null;
+        await Load();
+    }
+}

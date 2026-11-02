@@ -1,0 +1,78 @@
+@page "/makbuz/{PaymentId:int}"
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject IConfiguration Config
+
+<PageTitle>Makbuz - Disci</PageTitle>
+
+@if (payment is null)
+{
+    <div class="panel"><div class="empty">Ödeme bulunamadı.</div></div>
+}
+else
+{
+    <div class="d-flex gap-2 mb-3 no-print">
+        <a href="hastalar/@payment.PatientId" class="btn btn-light"><Icon Name="chevron-left" /> Hasta kartı</a>
+        <button type="button" class="btn btn-primary" onclick="window.print()"><Icon Name="printer" /> Yazdır</button>
+    </div>
+
+    <div class="panel mx-auto" style="max-width:720px">
+        <div class="panel-body p-4">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <div class="d-flex align-items-center gap-2 fs-5 fw-bold"><span class="side-brand p-0"><span class="logo"><Icon Name="tooth" /></span></span> @(Config["Clinic:Name"] ?? "Diş Kliniği")</div>
+                    <div class="small text-secondary">@Config["Clinic:Address"]</div>
+                    <div class="small text-secondary">@Config["Clinic:Phone"]</div>
+                </div>
+                <div class="text-end">
+                    <div class="fs-5 fw-bold">TAHSİLAT MAKBUZU</div>
+                    <div class="small text-secondary">No: @(payment.ReceiptNo ?? payment.Id.ToString("D6"))</div>
+                    <div class="small text-secondary">Tarih: @Display.Date(payment.Date)</div>
+                </div>
+            </div>
+
+            @if (payment.IsCancelled)
+            {
+                <div class="callout callout-danger mb-3"><Icon Name="alert" /> Bu ödeme iptal edilmiştir.</div>
+            }
+
+            <dl class="dl-grid mb-4">
+                <dt>Hasta</dt><dd class="fw-650">@payment.Patient.FullName</dd>
+                <dt>Protokol no</dt><dd>@(payment.Patient.LegacyId ?? payment.Patient.Id)</dd>
+                <dt>Açıklama</dt><dd>@(payment.Description ?? "Diş tedavisi ödemesi")</dd>
+                <dt>Ödeme şekli</dt><dd>@Display.Name(payment.Method) @payment.BankName</dd>
+                @if (payment.DueDate is not null) { <dt>Vade</dt><dd>@Display.Date(payment.DueDate)</dd> }
+            </dl>
+
+            <div class="p-3 rounded-3 mb-4" style="background:var(--c-surface-2);border:1px solid var(--c-border)">
+                <div class="d-flex justify-content-between align-items-baseline">
+                    <span class="text-secondary">Alınan tutar</span>
+                    <span class="fs-3 fw-bold tabular">@Display.Money(payment.Amount, payment.Currency)</span>
+                </div>
+                @if (payment.Currency == Currencies.Try)
+                {
+                    <div class="small text-secondary">Yalnız: @Display.MoneyInWords(payment.Amount)</div>
+                }
+            </div>
+
+            <div class="d-flex justify-content-between small">
+                <span>Kalan bakiye: <span class="fw-650">@Display.Money(balance)</span></span>
+                <span class="text-center" style="min-width:180px;border-top:1px solid var(--c-border-strong);padding-top:.4rem">Teslim alan / imza</span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int PaymentId { get; set; }
+
+    private Payment? payment;
+    private decimal balance;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        payment = await db.Payments.AsNoTracking().Include(p => p.Patient).FirstOrDefaultAsync(p => p.Id == PaymentId);
+        if (payment is not null)
+            balance = await Ledger.BalanceAsync(db, payment.PatientId);
+    }
+}

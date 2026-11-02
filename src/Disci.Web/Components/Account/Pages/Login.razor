@@ -13,11 +13,15 @@
 
 <PageTitle>Giriş</PageTitle>
 
-<div class="row justify-content-center">
-    <div class="col-12 col-sm-10 col-md-7 col-lg-5">
-        <section class="card shadow-sm mt-4">
-            <div class="card-body p-4">
-                <h1 class="h3 mb-1">Disci</h1>
+<div style="width:100%;max-width:420px">
+    <div>
+        <section class="panel" style="box-shadow:var(--shadow-lg)">
+            <div class="panel-body p-4 p-sm-5">
+                <div class="side-brand p-0 mb-4" style="height:auto">
+                    <span class="logo"><Icon Name="tooth" /></span>
+                    <span>Disci<small>Diş kliniği yönetimi</small></span>
+                </div>
+                <h1 class="h4 mb-1">Hoş geldiniz</h1>
                 <p class="text-secondary mb-4">Kullanıcı adınız ve parolanızla giriş yapın.</p>
                 <StatusMessage Message="@errorMessage" />
                 <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">

@@ -49,6 +49,9 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<Prescription> Prescriptions => Set<Prescription>();
     public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
+    public DbSet<PrescriptionTemplate> PrescriptionTemplates => Set<PrescriptionTemplate>();
+    public DbSet<PrescriptionTemplateItem> PrescriptionTemplateItems => Set<PrescriptionTemplateItem>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -203,6 +206,21 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
             e.Property(x => x.CreatedByUserId).HasMaxLength(450);
             LegacyIndex(e);
         });
+        b.Entity<Reminder>(e =>
+        {
+            e.Property(x => x.Notes).HasMaxLength(1000);
+            e.Property(x => x.ForRole).HasMaxLength(50);
+            e.Property(x => x.CreatedByUserId).HasMaxLength(450);
+            e.HasIndex(x => new { x.IsDone, x.DueDate });
+        });
+        b.Entity<PrescriptionTemplate>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Notes).HasMaxLength(1000);
+        });
+        b.Entity<PrescriptionTemplateItem>(e => e
+            .HasOne(x => x.PrescriptionTemplate).WithMany(x => x.Items).HasForeignKey(x => x.PrescriptionTemplateId)
+            .OnDelete(DeleteBehavior.Cascade));
         b.Entity<PrescriptionItem>(e => e
             .HasOne(x => x.Prescription).WithMany(x => x.Items).HasForeignKey(x => x.PrescriptionId)
             .OnDelete(DeleteBehavior.Cascade));
@@ -232,6 +250,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
         (typeof(PriceListItem), typeof(PriceList)),
         (typeof(TreatmentItem), typeof(TreatmentSession)),
         (typeof(PrescriptionItem), typeof(Prescription)),
+        (typeof(PrescriptionTemplateItem), typeof(PrescriptionTemplate)),
     ];
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

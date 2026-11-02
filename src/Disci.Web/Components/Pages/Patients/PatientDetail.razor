@@ -1,6 +1,10 @@
 @page "/hastalar/{Id:int}"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+@inject NavigationManager Nav
 
 <PageTitle>@(patient is null ? "Hasta" : patient.FullName) - Disci</PageTitle>
 
@@ -10,185 +14,433 @@
 }
 else if (patient is null)
 {
-    <h1 class="h3">Hasta bulunamadı</h1>
-    <a href="hastalar">Hasta listesine dön</a>
+    <div class="panel"><div class="empty"><Icon Name="user" /><div>Hasta bulunamadı.</div><a href="hastalar">Hasta listesine dön</a></div></div>
 }
 else
 {
-    <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
-        <h1 class="h3 m-0">@patient.FullName</h1>
-        @if (patient.IsArchived) { <span class="badge text-bg-secondary">Arşiv</span> }
-    </div>
-    <p class="text-secondary mb-3">
-        Protokol @patient.LegacyId
-        @if (patient.BirthDate is not null) { <text> · @Display.Date(patient.BirthDate) (@Display.Age(patient.BirthDate))</text> }
-        @if (patient.MobilePhone is not null) { <text> · </text><a href="tel:@patient.MobilePhone">@patient.MobilePhone</a> }
-    </p>
+    <div class="row g-4 mb-4">
+        <div class="col-xl-8">
+            <div class="panel h-100">
+                <div class="panel-body">
+                    <div class="patient-head">
+                        <span class="avatar avatar-lg">@Display.Initials(patient.FullName)</span>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <h1>@patient.FullName</h1>
+                                @if (patient.IsArchived) { <span class="chip chip-muted"><Icon Name="archive" Class="ico-sm" /> Arşivde</span> }
+                            </div>
+                            <div class="facts">
+                                <span>#@(patient.LegacyId ?? patient.Id)</span>
+                                @if (patient.BirthDate is not null) { <span><Icon Name="cake" Class="ico-sm" /> @Display.Date(patient.BirthDate) · @Display.Age(patient.BirthDate)</span> }
+                                @if (patient.MobilePhone is not null)
+                                {
+                                    <span><Icon Name="phone" Class="ico-sm" /> <a href="tel:@patient.MobilePhone">@patient.MobilePhone</a></span>
+                                }
+                                <span><Icon Name="tooth" Class="ico-sm" /> @(patient.PrimaryDentist?.FullName ?? "Ortak havuz")</span>
+                                @if (nextAppointment is { } na)
+                                {
+                                    <span><Icon Name="calendar" Class="ico-sm" /> Sonraki randevu: @Display.ShortDay(DateOnly.FromDateTime(na.Start)) @Display.Time(na.Start)</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
 
-    <div class="row g-3 mb-3">
-        <StatCard Title="Yapılan tedaviler" Value="@Display.Money(treatmentTotal)" />
-        <StatCard Title="Ödemeler" Value="@Display.Money(paymentTotal)" />
-        <StatCard Title="@(balance > 0 ? "Kalan borç" : "Bakiye")" Value="@Display.Money(balance)" />
-        <StatCard Title="Son tedavi" Value="@(lastVisit is null ? "-" : Display.Date(lastVisit))" />
-    </div>
-
-    <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto">
-        @foreach (var (key, title) in tabs)
-        {
-            <li class="nav-item">
-                <button class="nav-link text-nowrap @(tab == key ? "active" : "")" @onclick="() => tab = key">@title</button>
-            </li>
-        }
-    </ul>
-
-    @switch (tab)
-    {
-        case "genel":
-            <dl class="row">
-                <dt class="col-sm-3">Ad soyad</dt><dd class="col-sm-9">@patient.FullName</dd>
-                <dt class="col-sm-3">TC kimlik no</dt><dd class="col-sm-9">@patient.NationalId</dd>
-                <dt class="col-sm-3">Cinsiyet</dt><dd class="col-sm-9">@Display.Name(patient.Gender)</dd>
-                <dt class="col-sm-3">Doğum yeri</dt><dd class="col-sm-9">@patient.BirthPlace</dd>
-                <dt class="col-sm-3">Meslek</dt><dd class="col-sm-9">@patient.Occupation</dd>
-                <dt class="col-sm-3">Kan grubu</dt><dd class="col-sm-9">@patient.BloodGroup</dd>
-                <dt class="col-sm-3">Cep / ev / iş</dt><dd class="col-sm-9">@string.Join(" · ", new[] { patient.MobilePhone, patient.HomePhone, patient.WorkPhone }.Where(x => x is not null))</dd>
-                <dt class="col-sm-3">E-posta</dt><dd class="col-sm-9">@patient.Email</dd>
-                <dt class="col-sm-3">Ev adresi</dt><dd class="col-sm-9">@Display.Address(patient.HomeAddress)</dd>
-                <dt class="col-sm-3">İş adresi</dt><dd class="col-sm-9">@Display.Address(patient.WorkAddress)</dd>
-                <dt class="col-sm-3">Kayıt tarihi</dt><dd class="col-sm-9">@Display.Date(patient.RegisteredOn)</dd>
-                <dt class="col-sm-3">Tarife</dt><dd class="col-sm-9">@patient.PriceList?.Name</dd>
-                <dt class="col-sm-3">Hekimi</dt><dd class="col-sm-9">@(patient.PrimaryDentist?.FullName ?? "Ortak havuz")</dd>
-                <dt class="col-sm-3">Referans</dt><dd class="col-sm-9">@patient.ReferredBy @patient.ReferrerPhone</dd>
-                @foreach (var r in patient.Relatives)
-                {
-                    <dt class="col-sm-3">@Display.Name(r.Type)</dt>
-                    <dd class="col-sm-9">@r.Name @r.Phone @r.MobilePhone</dd>
-                }
-                @if (!string.IsNullOrWhiteSpace(patient.Notes))
-                {
-                    <dt class="col-sm-3">Not</dt><dd class="col-sm-9" style="white-space:pre-line">@patient.Notes</dd>
-                }
-            </dl>
-            break;
-
-        case "anamnez":
-            @if (patient.Anamnesis is null && patient.MedicalConditions.Count == 0)
-            {
-                <p class="text-secondary">Anamnez kaydı yok.</p>
-            }
-            else
-            {
-                @if (patient.MedicalConditions.Count > 0)
-                {
-                    @foreach (var g in patient.MedicalConditions.GroupBy(c => c.MedicalCondition.Category).OrderBy(g => g.Min(c => c.MedicalCondition.SortOrder)))
+                    @if (alerts.Count > 0)
                     {
-                        <h2 class="h6 mt-3">@g.Key</h2>
-                        <div class="d-flex flex-wrap gap-2">
-                            @foreach (var c in g.OrderBy(c => c.MedicalCondition.SortOrder))
+                        <div class="d-flex flex-wrap gap-1 mt-3" title="Sağlık uyarıları">
+                            <span class="chip chip-danger"><Icon Name="alert" Class="ico-sm" /> Dikkat</span>
+                            @foreach (var a in alerts)
                             {
-                                <span class="badge rounded-pill text-bg-warning">@c.MedicalCondition.Name</span>
+                                <span class="chip chip-danger">@a</span>
                             }
                         </div>
                     }
-                }
-                @if (patient.Anamnesis is { } a)
-                {
-                    <dl class="row mt-3">
-                        @if (a.DrugAllergies is not null) { <dt class="col-sm-3">İlaç alerjisi</dt><dd class="col-sm-9">@a.DrugAllergies</dd> }
-                        @if (a.FoodAllergies is not null) { <dt class="col-sm-3">Gıda alerjisi</dt><dd class="col-sm-9">@a.FoodAllergies</dd> }
-                        @if (a.PregnancyDate is not null) { <dt class="col-sm-3">Hamilelik tarihi</dt><dd class="col-sm-9">@Display.Date(a.PregnancyDate)</dd> }
-                        @if (a.Notes is not null) { <dt class="col-sm-3">Not</dt><dd class="col-sm-9">@a.Notes</dd> }
-                    </dl>
-                }
-            }
-            break;
 
-        case "tedavi":
-            @if (patient.TreatmentSessions.Count == 0)
-            {
-                <p class="text-secondary">Tedavi kaydı yok.</p>
-            }
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                        <tr><th>Tarih</th><th>Tür</th><th>Diş</th><th>İşlem</th><th class="text-end">Tutar</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in patient.TreatmentSessions.OrderByDescending(s => s.Date).ThenByDescending(s => s.Id))
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <a class="btn btn-primary" href="randevular?hasta=@patient.Id"><Icon Name="calendar-plus" /> Randevu ver</a>
+                        <button class="btn btn-soft" @onclick="() => paying = true"><Icon Name="cash" /> Ödeme al</button>
+                        <button class="btn btn-soft" @onclick="() => OpenTreatment(TreatmentKind.Planned)"><Icon Name="tooth" /> Tedavi ekle</button>
+                        <button class="btn btn-soft" @onclick="() => OpenPrescription(null, null)"><Icon Name="pill" /> Reçete yaz</button>
+                        <a class="btn btn-light" href="hastalar/@patient.Id/duzenle"><Icon Name="edit" /> Düzenle</a>
+                        @if (patient.MobilePhone is not null && Display.WhatsApp(patient.MobilePhone, $"Merhaba {patient.FirstName},") is { } wa)
                         {
-                            @foreach (var i in s.Items.OrderBy(i => i.ToothNumber))
-                            {
-                                <tr class="@(s.Kind == TreatmentKind.Completed ? "" : "text-secondary")">
-                                    <td class="text-nowrap">@Display.Date(s.Date)</td>
-                                    <td><span class="badge @KindBadge(s.Kind)">@Display.Name(s.Kind)</span></td>
-                                    <td>@i.ToothNumber</td>
-                                    <td>@i.Description</td>
-                                    <td class="text-end text-nowrap">@(i.Price == 0 ? "" : Display.Money(i.Price, i.Currency))</td>
-                                </tr>
-                            }
+                            <a class="btn btn-light" href="@wa" target="_blank" rel="noopener"><Icon Name="message" /> WhatsApp</a>
                         }
-                    </tbody>
-                </table>
+                        <button class="btn btn-light ms-auto" @onclick="() => confirmArchive = true">
+                            <Icon Name="@(patient.IsArchived ? "restore" : "archive")" /> @(patient.IsArchived ? "Arşivden çıkar" : "Arşive kaldır")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="panel h-100">
+                <div class="panel-head"><Icon Name="wallet" /><h2>Hesap özeti</h2></div>
+                <div class="panel-body">
+                    <div class="fin-grid mb-3">
+                        <div><div class="lbl">Toplam ücret</div><div class="val">@Display.Money(charged)</div></div>
+                        <div><div class="lbl">Alınan</div><div class="val money-pos">@Display.Money(paid)</div></div>
+                        <div><div class="lbl">@(balance > 0 ? "Kalan borç" : balance < 0 ? "Fazla ödeme" : "Kalan")</div><div class="val @(balance > 0 ? "money-neg" : "")">@Display.Money(Math.Abs(balance))</div></div>
+                    </div>
+                    <div class="fin-bar mb-2"><span style="width:@(charged == 0 ? 0 : Math.Min(100, paid / charged * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></span></div>
+                    <div class="small text-secondary d-flex justify-content-between">
+                        <span>@(charged == 0 ? "Henüz ücretli tedavi yok" : $"%{Math.Min(100, paid / charged * 100):0} ödendi")</span>
+                        @if (plannedTotal > 0) { <span>Bekleyen plan: <span class="fw-650 text-body">@Display.Money(plannedTotal)</span></span> }
+                    </div>
+                    @if (foreignNote is not null)
+                    {
+                        <div class="small text-secondary mt-2">@foreignNote</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        @foreach (var (key, title, count) in Tabs)
+        {
+            <button class="@(tab == key ? "active" : "")" @onclick="() => tab = key">
+                @title @if (count > 0) { <span class="count">@count</span> }
+            </button>
+        }
+    </div>
+
+    @switch (tab)
+    {
+        case "hesap":
+            <div class="panel panel-flush">
+                <div class="panel-head">
+                    <h2>Hesap hareketleri</h2>
+                    <div class="actions">
+                        <button class="btn btn-sm btn-light" @onclick="() => OpenTreatment(TreatmentKind.Completed)"><Icon Name="plus" Class="ico-sm" /> Yapılan tedavi</button>
+                        <button class="btn btn-sm btn-primary" @onclick="() => paying = true"><Icon Name="cash" Class="ico-sm" /> Ödeme al</button>
+                    </div>
+                </div>
+                @if (ledger.Count == 0)
+                {
+                    <div class="empty"><Icon Name="receipt" /><div>Henüz hesap hareketi yok.</div></div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead><tr><th>Tarih</th><th>Açıklama</th><th class="text-end">Borç</th><th class="text-end">Ödeme</th><th class="text-end">Bakiye</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var r in ledger)
+                                {
+                                    <tr class="@(r.Cancelled ? "text-secondary text-decoration-line-through" : "")">
+                                        <td class="text-nowrap">@Display.Date(r.Date)</td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="kpi-icon" style="width:28px;height:28px;border-radius:8px;@(r.PaymentId is null ? "" : "background:var(--c-success-soft);color:var(--c-success)")">
+                                                    <Icon Name="@(r.PaymentId is null ? "tooth" : "cash")" Class="ico-sm" />
+                                                </span>
+                                                <div class="min-w-0">
+                                                    <div>@r.Text</div>
+                                                    @if (r.Sub is not null) { <div class="small text-secondary">@r.Sub</div> }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="text-end tabular text-nowrap">@(r.Debit == 0 ? "" : Display.Money(r.Debit))</td>
+                                        <td class="text-end tabular text-nowrap money-pos">@(r.Credit == 0 ? "" : Display.Money(r.Credit))</td>
+                                        <td class="text-end tabular text-nowrap fw-650 @(r.Balance > 0 ? "money-neg" : "")">@Display.Money(r.Balance)</td>
+                                        <td class="text-end text-nowrap">
+                                            @if (r.PaymentId is { } pid && !r.Cancelled)
+                                            {
+                                                <a class="btn btn-sm btn-light btn-icon" href="makbuz/@pid" target="_blank" title="Makbuz yazdır"><Icon Name="printer" Class="ico-sm" /></a>
+                                                @if (finance)
+                                                {
+                                                    <button class="btn btn-sm btn-light btn-icon" title="Ödemeyi iptal et" @onclick="() => cancelPaymentId = pid"><Icon Name="x" Class="ico-sm" /></button>
+                                                }
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr><td colspan="2">Toplam</td><td class="text-end tabular">@Display.Money(charged)</td><td class="text-end tabular money-pos">@Display.Money(paid)</td><td class="text-end tabular @(balance > 0 ? "money-neg" : "")">@Display.Money(balance)</td><td></td></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
             </div>
             break;
 
-        case "odeme":
-            @if (patient.Payments.Count == 0)
-            {
-                <p class="text-secondary">Ödeme kaydı yok.</p>
-            }
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                        <tr><th>Tarih</th><th>Şekli</th><th>Açıklama</th><th class="text-end">Tutar</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in patient.Payments.OrderByDescending(p => p.Date).ThenByDescending(p => p.Id))
+        case "tedavi":
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="panel">
+                        <div class="panel-head">
+                            <h2>Diş şeması</h2>
+                            <div class="actions legend">
+                                <span class="chip chip-success">Yapıldı</span><span class="chip chip-info">Planlı</span><span class="chip">Bulgu</span>
+                            </div>
+                        </div>
+                        <div class="panel-body"><ToothChart Marks="toothMarks" Titles="toothTitles" /></div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="panel panel-flush">
+                        <div class="panel-head">
+                            <h2>Tedavi planı</h2>
+                            <div class="actions">
+                                @if (selectedPlan.Count > 0)
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="CompleteSelected"><Icon Name="check" Class="ico-sm" /> @selectedPlan.Count işlemi yapıldı say</button>
+                                    <button class="btn btn-sm btn-light" @onclick="DeleteSelected"><Icon Name="trash" Class="ico-sm" /> Plandan çıkar</button>
+                                }
+                                <button class="btn btn-sm btn-soft" @onclick="() => OpenTreatment(TreatmentKind.Planned)"><Icon Name="plus" Class="ico-sm" /> Plana ekle</button>
+                            </div>
+                        </div>
+                        @{ var planned = Items(TreatmentKind.Planned).ToList(); }
+                        @if (planned.Count == 0)
                         {
-                            <tr class="@(p.IsCancelled ? "text-decoration-line-through text-secondary" : "")">
-                                <td class="text-nowrap">@Display.Date(p.Date)</td>
-                                <td>@Display.Name(p.Method)</td>
-                                <td>@p.Description</td>
-                                <td class="text-end text-nowrap">@Display.Money(p.Amount, p.Currency)</td>
-                            </tr>
+                            <div class="empty py-4">Bekleyen tedavi planı yok.</div>
                         }
-                    </tbody>
-                </table>
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table align-middle">
+                                    <thead><tr><th style="width:36px"></th><th>Plan tarihi</th><th>Diş</th><th>İşlem</th><th>Hekim</th><th class="text-end">Ücret</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var (s, i) in planned)
+                                        {
+                                            <tr class="clickable" @onclick="() => TogglePlan(i.Id)">
+                                                <td><input type="checkbox" class="form-check-input" checked="@selectedPlan.Contains(i.Id)" @onclick:stopPropagation="true" @onchange="() => TogglePlan(i.Id)" aria-label="Seç" /></td>
+                                                <td class="text-nowrap">@Display.Date(s.Date)</td>
+                                                <td>@i.ToothNumber</td>
+                                                <td>@i.Description</td>
+                                                <td class="text-secondary">@s.Dentist?.FullName</td>
+                                                <td class="text-end tabular text-nowrap">@(i.Price == 0 ? "" : Display.Money(i.Price, i.Currency))</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot><tr><td colspan="5">Plan toplamı</td><td class="text-end tabular">@Display.Money(plannedTotal)</td></tr></tfoot>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="panel panel-flush">
+                        <div class="panel-head">
+                            <h2>Yapılan tedaviler ve bulgular</h2>
+                            <div class="actions"><button class="btn btn-sm btn-soft" @onclick="() => OpenTreatment(TreatmentKind.Completed)"><Icon Name="plus" Class="ico-sm" /> Yapılan tedavi</button></div>
+                        </div>
+                        @{ var history = patient.TreatmentSessions.Where(s => s.Kind != TreatmentKind.Planned).OrderByDescending(s => s.Date).ThenByDescending(s => s.Id).ToList(); }
+                        @if (history.Count == 0)
+                        {
+                            <div class="empty py-4">Kayıt yok.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table align-middle">
+                                    <thead><tr><th>Tarih</th><th>Tür</th><th>Diş</th><th>İşlem</th><th>Hekim</th><th class="text-end">Ücret</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var s in history)
+                                        {
+                                            @foreach (var i in s.Items.OrderBy(i => i.ToothNumber))
+                                            {
+                                                <tr class="@(s.Kind == TreatmentKind.Completed ? "" : "text-secondary")">
+                                                    <td class="text-nowrap">@Display.Date(s.Date)</td>
+                                                    <td><span class="chip @(s.Kind == TreatmentKind.Completed ? "chip-success" : "")">@Display.Name(s.Kind)</span></td>
+                                                    <td>@i.ToothNumber</td>
+                                                    <td>@i.Description</td>
+                                                    <td class="text-secondary">@s.Dentist?.FullName</td>
+                                                    <td class="text-end tabular text-nowrap">@(i.Price == 0 ? "" : Display.Money(i.Price, i.Currency))</td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            break;
+
+        case "randevu":
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Randevular</h2>
+                    <div class="actions"><a class="btn btn-sm btn-primary" href="randevular?hasta=@patient.Id"><Icon Name="calendar-plus" Class="ico-sm" /> Randevu ver</a></div>
+                </div>
+                @if (appointments.Count == 0)
+                {
+                    <div class="empty py-4">Randevu kaydı yok.</div>
+                }
+                else
+                {
+                    <div class="list">
+                        @foreach (var a in appointments)
+                        {
+                            <a class="list-row st @Display.Css(a.Status)" href="randevular?tarih=@a.Start.ToString("yyyy-MM-dd")">
+                                <span class="stripe"></span>
+                                <div class="time-col" style="width:90px">@Display.Date(DateOnly.FromDateTime(a.Start))<small>@Display.Time(a.Start)–@Display.Time(a.End)</small></div>
+                                <div class="grow">
+                                    <div class="title">@(a.AppointmentType?.Name ?? "Randevu")</div>
+                                    <div class="meta">@a.Dentist.FullName @(a.Notes is null ? "" : $"· {a.Notes}")</div>
+                                </div>
+                                <StatusBadge Status="a.Status" />
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+            break;
+
+        case "recete":
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Reçeteler</h2>
+                    <div class="actions"><button class="btn btn-sm btn-primary" @onclick="() => OpenPrescription(null, null)"><Icon Name="pill" Class="ico-sm" /> Reçete yaz</button></div>
+                </div>
+                @if (prescriptions.Count == 0)
+                {
+                    <div class="empty py-4"><Icon Name="pill" /><div>Reçete yok.</div></div>
+                }
+                else
+                {
+                    <div class="list">
+                        @foreach (var r in prescriptions)
+                        {
+                            <div class="list-row align-items-start">
+                                <div class="time-col" style="width:84px">@Display.Date(r.Date)</div>
+                                <div class="grow">
+                                    <div class="title">@string.Join(", ", r.Items.OrderBy(i => i.Id).Select(i => i.MedicationName))</div>
+                                    <div class="meta">
+                                        @r.Dentist.FullName @(r.Diagnosis is null ? "" : $"· {r.Diagnosis}")
+                                        @if (writers.GetValueOrDefault(r.Id) is { } w) { <text> · yazan: @w</text> }
+                                    </div>
+                                    @foreach (var i in r.Items.OrderBy(i => i.Id))
+                                    {
+                                        <div class="small text-secondary">@i.MedicationName @i.Dose · @i.Quantity kutu @(i.Usage is null ? "" : $"· {i.Usage}")</div>
+                                    }
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <a class="btn btn-sm btn-light btn-icon" href="recete/@r.Id" title="Yazdır"><Icon Name="printer" Class="ico-sm" /></a>
+                                    <button class="btn btn-sm btn-light btn-icon" title="Aynısını yeniden yaz" @onclick="() => OpenPrescription(null, r.Id)"><Icon Name="copy" Class="ico-sm" /></button>
+                                    <button class="btn btn-sm btn-light btn-icon" title="Düzenle" @onclick="() => OpenPrescription(r.Id, null)"><Icon Name="edit" Class="ico-sm" /></button>
+                                    @if (finance)
+                                    {
+                                        <button class="btn btn-sm btn-light btn-icon" title="Sil" @onclick="() => deleteRxId = r.Id"><Icon Name="trash" Class="ico-sm" /></button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            break;
+
+        case "genel":
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Hasta bilgileri</h2>
+                    <div class="actions"><a class="btn btn-sm btn-light" href="hastalar/@patient.Id/duzenle"><Icon Name="edit" Class="ico-sm" /> Düzenle</a></div>
+                </div>
+                <div class="panel-body">
+                    <dl class="dl-grid">
+                        <dt>TC kimlik no</dt><dd>@patient.NationalId</dd>
+                        <dt>Cinsiyet</dt><dd>@Display.Name(patient.Gender)</dd>
+                        <dt>Doğum yeri</dt><dd>@patient.BirthPlace</dd>
+                        <dt>Meslek</dt><dd>@patient.Occupation</dd>
+                        <dt>Kan grubu</dt><dd>@patient.BloodGroup</dd>
+                        <dt>Telefonlar</dt><dd>@string.Join(" · ", new[] { patient.MobilePhone, patient.HomePhone, patient.WorkPhone }.Where(x => x is not null))</dd>
+                        <dt>E-posta</dt><dd>@patient.Email</dd>
+                        <dt>Ev adresi</dt><dd>@Display.Address(patient.HomeAddress)</dd>
+                        <dt>İş adresi</dt><dd>@Display.Address(patient.WorkAddress)</dd>
+                        <dt>Kayıt tarihi</dt><dd>@Display.Date(patient.RegisteredOn)</dd>
+                        <dt>Fiyat listesi</dt><dd>@(patient.PriceList?.Name ?? "Varsayılan")</dd>
+                        <dt>Sabit indirim</dt><dd>@(patient.DiscountRate is { } d ? $"%{d:0.##}" : "")</dd>
+                        <dt>Kurum / sigorta</dt><dd>@patient.InsuranceProvider @patient.InsuranceNo</dd>
+                        <dt>Yönlendiren</dt><dd>@patient.ReferredBy @patient.ReferrerPhone</dd>
+                        @foreach (var r in patient.Relatives)
+                        {
+                            <dt>@Display.Name(r.Type)</dt>
+                            <dd>@r.Name @r.Phone @r.MobilePhone</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(patient.Notes))
+                        {
+                            <dt>Not</dt><dd style="white-space:pre-line">@patient.Notes</dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+            break;
+
+        case "anamnez":
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Anamnez</h2>
+                    <div class="actions"><a class="btn btn-sm btn-light" href="hastalar/@patient.Id/duzenle"><Icon Name="edit" Class="ico-sm" /> Düzenle</a></div>
+                </div>
+                <div class="panel-body">
+                    @if (patient.Anamnesis is null && patient.MedicalConditions.Count == 0)
+                    {
+                        <p class="text-secondary m-0">Anamnez kaydı yok.</p>
+                    }
+                    @foreach (var g in patient.MedicalConditions.GroupBy(c => c.MedicalCondition.Category).OrderBy(g => g.Min(c => c.MedicalCondition.SortOrder)))
+                    {
+                        <div class="small text-secondary fw-650 mt-2 mb-1">@g.Key</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var c in g.OrderBy(c => c.MedicalCondition.SortOrder))
+                            {
+                                <span class="chip chip-warning">@c.MedicalCondition.Name</span>
+                            }
+                        </div>
+                    }
+                    @if (patient.Anamnesis is { } an)
+                    {
+                        <dl class="dl-grid mt-3">
+                            @if (an.DrugAllergies is not null) { <dt>İlaç alerjisi</dt><dd class="text-danger fw-650">@an.DrugAllergies</dd> }
+                            @if (an.FoodAllergies is not null) { <dt>Diğer alerjiler</dt><dd>@an.FoodAllergies</dd> }
+                            @if (an.PregnancyDate is not null) { <dt>Hamilelik tarihi</dt><dd>@Display.Date(an.PregnancyDate)</dd> }
+                            @if (an.Notes is not null) { <dt>Not</dt><dd style="white-space:pre-line">@an.Notes</dd> }
+                        </dl>
+                    }
+                </div>
             </div>
             break;
 
         case "not":
-            @if (patient.ToothNotes.Count == 0 && patient.PatientNotes.Count == 0)
+            <div class="panel mb-3">
+                <div class="panel-body">
+                    <textarea class="form-control mb-2" rows="2" placeholder="Hasta hakkında not ekleyin..." @bind="newNote"></textarea>
+                    <button class="btn btn-sm btn-primary" disabled="@string.IsNullOrWhiteSpace(newNote)" @onclick="AddNote"><Icon Name="plus" Class="ico-sm" /> Not ekle</button>
+                </div>
+            </div>
+            @foreach (var n in patient.PatientNotes.OrderByDescending(n => n.CreatedAt))
             {
-                <p class="text-secondary">Not yok.</p>
-            }
-            @foreach (var n in patient.PatientNotes)
-            {
-                <div class="card mb-2"><div class="card-body" style="white-space:pre-line">@n.Text</div></div>
+                <div class="panel mb-2"><div class="panel-body">
+                    <div class="small text-secondary mb-1">@Display.Date(DateOnly.FromDateTime(n.CreatedAt.ToLocalTime()))</div>
+                    <div style="white-space:pre-line">@n.Text</div>
+                </div></div>
             }
             @foreach (var n in patient.ToothNotes.OrderBy(n => n.ToothNumber))
             {
-                <div class="card mb-2">
-                    <div class="card-body">
-                        <div class="fw-semibold">Diş @n.ToothNumber</div>
-                        <div style="white-space:pre-line">@n.Note.Trim()</div>
-                    </div>
-                </div>
+                <div class="panel mb-2"><div class="panel-body">
+                    <div class="fw-650">Diş @n.ToothNumber</div>
+                    <div style="white-space:pre-line">@n.Note.Trim()</div>
+                </div></div>
             }
             break;
 
         case "foto":
             @if (patient.Photos.Count == 0)
             {
-                <p class="text-secondary">Fotoğraf yok.</p>
+                <div class="panel"><div class="empty"><Icon Name="image" /><div>Fotoğraf yok.</div></div></div>
             }
-            <div class="row g-2">
+            <div class="row g-3">
                 @foreach (var p in patient.Photos.OrderByDescending(p => p.TakenOn))
                 {
                     <div class="col-6 col-md-4 col-lg-3">
-                        <a href="files/photos/@p.Id" target="_blank" class="card text-decoration-none">
-                            <img src="files/photos/@p.Id" class="card-img-top" alt="@Display.Name(p.Kind) fotoğrafı" loading="lazy" style="aspect-ratio:4/3;object-fit:cover" />
-                            <div class="card-body p-2 small text-body">
+                        <a href="files/photos/@p.Id" target="_blank" class="panel d-block overflow-hidden text-body">
+                            <img src="files/photos/@p.Id" class="w-100" alt="@Display.Name(p.Kind) fotoğrafı" loading="lazy" style="aspect-ratio:4/3;object-fit:cover" />
+                            <div class="p-2 small">
                                 @Display.Date(p.TakenOn) · @Display.Name(p.Kind)
                                 @if (p.ToothNumber is not null) { <text> · Diş @p.ToothNumber</text> }
                             </div>
@@ -198,26 +450,127 @@ else
             </div>
             break;
     }
+
+    @if (paying)
+    {
+        <PaymentEditor PatientId="patient.Id" Remaining="balance" OnSaved="PaymentSaved" OnClose="() => paying = false" />
+    }
+    @if (treatmentKind is { } k)
+    {
+        <TreatmentEditor PatientId="patient.Id" InitialKind="k" OnSaved="TreatmentSaved" OnClose="() => treatmentKind = null" />
+    }
+    @if (prescribing)
+    {
+        <PrescriptionEditor PatientId="patient.Id" PrescriptionId="editRxId" CopyFromId="copyRxId" OnSaved="PrescriptionSaved" OnClose="() => prescribing = false" />
+    }
+    @if (deleteRxId is { } dr)
+    {
+        <Modal Title="Reçeteyi sil" OnClose="() => deleteRxId = null">
+            <ChildContent><p class="m-0">Reçete kalıcı olarak silinecek. Hastaya verilmiş bir reçeteyse silmek yerine düzeltip yeniden yazdırmayı düşünün.</p></ChildContent>
+            <Footer>
+                <button class="btn btn-light" @onclick="() => deleteRxId = null">Vazgeç</button>
+                <button class="btn btn-danger" @onclick="() => DeletePrescription(dr)">Sil</button>
+            </Footer>
+        </Modal>
+    }
+    @if (cancelPaymentId is { } cp)
+    {
+        <Modal Title="Ödemeyi iptal et" OnClose="() => cancelPaymentId = null">
+            <ChildContent>
+                <p class="m-0">Bu ödeme iptal edilecek ve bakiyeye eklenmeyecek. Kayıt silinmez, üstü çizili görünür.</p>
+            </ChildContent>
+            <Footer>
+                <button class="btn btn-light" @onclick="() => cancelPaymentId = null">Vazgeç</button>
+                <button class="btn btn-danger" @onclick="() => CancelPayment(cp)">İptal et</button>
+            </Footer>
+        </Modal>
+    }
+    @if (confirmArchive)
+    {
+        <Modal Title="@(patient.IsArchived ? "Arşivden çıkar" : "Arşive kaldır")" OnClose="() => confirmArchive = false">
+            <ChildContent>
+                @if (patient.IsArchived)
+                {
+                    <p class="m-0">Hasta yeniden aktif listede ve aramalarda görünecek.</p>
+                }
+                else
+                {
+                    <p class="m-0">Hasta aktif listeden ve randevu aramasından kalkar. Tedavi ve ödeme kayıtları silinmez; Hastalar sayfasındaki "Arşiv" süzgeciyle bulunabilir.</p>
+                    @if (balance > 0)
+                    {
+                        <div class="callout callout-warning mt-3"><Icon Name="alert" /> Hastanın @Display.Money(balance) borcu var.</div>
+                    }
+                }
+            </ChildContent>
+            <Footer>
+                <button class="btn btn-light" @onclick="() => confirmArchive = false">Vazgeç</button>
+                <button class="btn btn-primary" @onclick="ToggleArchive">@(patient.IsArchived ? "Arşivden çıkar" : "Arşive kaldır")</button>
+            </Footer>
+        </Modal>
+    }
+    <Toast @ref="toast" />
 }
 
 @code {
     [Parameter] public int Id { get; set; }
 
     private Patient? patient;
-    private bool loading = true;
-    private string tab = "tedavi";
-    private decimal treatmentTotal, paymentTotal, balance;
-    private DateOnly? lastVisit;
+    private bool loading = true, finance, paying, confirmArchive;
+    private string tab = "hesap";
+    private decimal charged, paid, balance, plannedTotal;
+    private string? foreignNote, newNote;
+    private List<string> alerts = [];
+    private List<LedgerRow> ledger = [];
+    private List<Appointment> appointments = [];
+    private Appointment? nextAppointment;
+    private Dictionary<int, string> toothMarks = [];
+    private Dictionary<int, string> toothTitles = [];
+    private HashSet<int> selectedPlan = [];
+    private TreatmentKind? treatmentKind;
+    private int? cancelPaymentId;
+    private List<Prescription> prescriptions = [];
+    private Dictionary<int, string> writers = [];
+    private bool prescribing;
+    private int? editRxId, copyRxId, deleteRxId;
+    private Toast? toast;
 
-    private static readonly (string Key, string Title)[] tabs =
+    private sealed record LedgerRow(DateOnly Date, string Text, string? Sub, decimal Debit, decimal Credit, bool Cancelled, int? PaymentId)
+    {
+        public decimal Balance { get; set; }
+    }
+
+    private IEnumerable<(string Key, string Title, int Count)> Tabs =>
     [
-        ("tedavi", "Tedaviler"), ("odeme", "Ödemeler"), ("genel", "Bilgiler"),
-        ("anamnez", "Anamnez"), ("not", "Notlar"), ("foto", "Fotoğraflar"),
+        ("hesap", "Hesap", 0),
+        ("tedavi", "Tedaviler", Items(TreatmentKind.Planned).Count()),
+        ("randevu", "Randevular", appointments.Count(a => a.Start >= DateTime.Today && !Scheduling.Inactive.Contains(a.Status))),
+        ("recete", "Reçeteler", prescriptions.Count),
+        ("genel", "Bilgiler", 0),
+        ("anamnez", "Anamnez", alerts.Count),
+        ("not", "Notlar", patient!.PatientNotes.Count + patient.ToothNotes.Count),
+        ("foto", "Fotoğraflar", patient.Photos.Count),
     ];
+
+    private IEnumerable<(TreatmentSession Session, TreatmentItem Item)> Items(TreatmentKind kind) =>
+        patient!.TreatmentSessions.Where(s => s.Kind == kind).OrderByDescending(s => s.Date)
+            .SelectMany(s => s.Items.OrderBy(i => i.ToothNumber).Select(i => (s, i)));
 
     protected override async Task OnParametersSetAsync()
     {
-        loading = true;
+        finance = await Me.CanSeeFinanceAsync();
+        await Load();
+        loading = false;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) Events.Changed += OnChanged;
+    }
+
+    private Task OnChanged() => InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    private async Task Load()
+    {
         await using var db = await DbFactory.CreateDbContextAsync();
         patient = await db.Patients.AsNoTracking().AsSplitQuery()
             .Include(p => p.PriceList)
@@ -229,25 +582,227 @@ else
             .Include(p => p.PatientNotes)
             .Include(p => p.Photos)
             .Include(p => p.TreatmentSessions).ThenInclude(s => s.Items)
+            .Include(p => p.TreatmentSessions).ThenInclude(s => s.Dentist)
             .Include(p => p.Payments)
             .FirstOrDefaultAsync(p => p.Id == Id);
+        if (patient is null) return;
 
-        if (patient is not null)
-        {
-            // Balance in TRY only; the handful of foreign-currency records are listed but not converted.
-            var done = patient.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed).ToList();
-            treatmentTotal = done.SelectMany(s => s.Items).Where(i => i.Currency == Currencies.Try).Sum(i => i.Price);
-            paymentTotal = patient.Payments.Where(p => !p.IsCancelled && p.Currency == Currencies.Try).Sum(p => p.Amount);
-            balance = treatmentTotal - paymentTotal;
-            lastVisit = done.Count == 0 ? null : done.Max(s => s.Date);
-        }
-        loading = false;
+        appointments = await db.Appointments.AsNoTracking().Include(a => a.Dentist).Include(a => a.AppointmentType)
+            .Where(a => a.PatientId == Id).OrderByDescending(a => a.Start).ToListAsync();
+        nextAppointment = appointments.Where(a => a.Start >= DateTime.Now && !Scheduling.Inactive.Contains(a.Status)).MinBy(a => a.Start);
+
+        prescriptions = await db.Prescriptions.AsNoTracking().Include(r => r.Items).Include(r => r.Dentist)
+            .Where(r => r.PatientId == Id).OrderByDescending(r => r.Date).ThenByDescending(r => r.Id).ToListAsync();
+        // Name the writer only when it is not the dentist the prescription is issued under (assistant on their behalf).
+        var writerIds = prescriptions.Where(r => r.CreatedByUserId != null).Select(r => r.CreatedByUserId!).Distinct().ToList();
+        var users = await db.Users.AsNoTracking().Where(u => writerIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => new { u.FullName, u.DentistId });
+        writers = prescriptions
+            .Where(r => r.CreatedByUserId is { } uid && users.TryGetValue(uid, out var u) && u.DentistId != r.DentistId)
+            .ToDictionary(r => r.Id, r => users[r.CreatedByUserId!].FullName);
+
+        alerts = [];
+        if (patient.Anamnesis?.DrugAllergies is { } da && PrescriptionSafety.IsAllergy(da)) alerts.Add("Alerji: " + da);
+        if (patient.Anamnesis?.FoodAllergies is { } fa && PrescriptionSafety.IsAllergy(fa)) alerts.Add("Alerji: " + fa);
+        alerts.AddRange(patient.MedicalConditions.OrderBy(c => c.MedicalCondition.SortOrder).Select(c => c.MedicalCondition.Name));
+
+        BuildLedger();
+        BuildChart();
+        selectedPlan.IntersectWith(Items(TreatmentKind.Planned).Select(x => x.Item.Id));
     }
 
-    private static string KindBadge(TreatmentKind kind) => kind switch
+    private void BuildLedger()
     {
-        TreatmentKind.Completed => "text-bg-success",
-        TreatmentKind.Planned => "text-bg-info",
-        _ => "text-bg-light border",
-    };
+        var p = patient!;
+        var rows = new List<LedgerRow>();
+        foreach (var s in p.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed))
+        {
+            var tl = s.Items.Where(i => i.Currency == Currencies.Try).ToList();
+            if (tl.Count == 0) continue;
+            var text = string.Join(", ", tl.GroupBy(i => i.Description)
+                .Select(g => g.Any(i => i.ToothNumber is not null) ? $"{g.Key} ({string.Join(", ", g.Where(i => i.ToothNumber is not null).Select(i => i.ToothNumber))})" : g.Key));
+            rows.Add(new LedgerRow(s.Date, text, s.Dentist?.FullName, tl.Sum(i => i.Price), 0, false, null));
+        }
+        foreach (var pay in p.Payments)
+        {
+            var foreign = pay.Currency != Currencies.Try;
+            var sub = string.Join(" · ", new[] { Display.Name(pay.Method), pay.BankName, pay.ReceiptNo is null ? null : "Makbuz " + pay.ReceiptNo,
+                pay.DueDate is null ? null : "Vade " + Display.Date(pay.DueDate), foreign ? Display.Money(pay.Amount, pay.Currency) + " (bakiyeye katılmaz)" : null }
+                .Where(x => !string.IsNullOrEmpty(x)));
+            rows.Add(new LedgerRow(pay.Date, pay.Description ?? "Ödeme", sub, 0, pay.IsCancelled || foreign ? 0 : pay.Amount, pay.IsCancelled, pay.Id));
+        }
+
+        // Running balance oldest first, shown newest first.
+        decimal running = 0;
+        foreach (var r in rows.OrderBy(r => r.Date).ThenBy(r => r.PaymentId is null ? 0 : 1))
+        {
+            running += r.Debit - r.Credit;
+            r.Balance = running;
+        }
+        ledger = rows.OrderByDescending(r => r.Date).ThenBy(r => r.PaymentId is null ? 1 : 0).ToList();
+
+        charged = rows.Sum(r => r.Debit);
+        paid = rows.Sum(r => r.Credit);
+        balance = charged - paid;
+        plannedTotal = Items(TreatmentKind.Planned).Where(x => x.Item.Currency == Currencies.Try).Sum(x => x.Item.Price);
+
+        var foreignItems = p.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed).SelectMany(s => s.Items).Count(i => i.Currency != Currencies.Try);
+        foreignNote = foreignItems > 0 ? $"{foreignItems} dövizli tedavi kalemi bakiyeye katılmadı (Tedaviler sekmesinde görünür)." : null;
+    }
+
+    private void BuildChart()
+    {
+        toothMarks = [];
+        toothTitles = [];
+        foreach (var s in patient!.TreatmentSessions)
+        {
+            var css = s.Kind switch { TreatmentKind.Completed => "done", TreatmentKind.Planned => "plan", _ => "finding" };
+            foreach (var i in s.Items.Where(i => i.ToothNumber is not null))
+            {
+                var t = i.ToothNumber!.Value;
+                var existing = toothMarks.GetValueOrDefault(t, "");
+                if (!existing.Split(' ').Contains(css))
+                    toothMarks[t] = (existing + " " + css).Trim();
+                toothTitles[t] = (toothTitles.TryGetValue(t, out var prev) ? prev + "\n" : $"Diş {t}\n") + $"{Display.Date(s.Date)} {Display.Name(s.Kind)}: {i.Description}";
+            }
+        }
+    }
+
+    private void OpenTreatment(TreatmentKind kind) => treatmentKind = kind;
+
+    private void OpenPrescription(int? editId, int? copyId)
+    {
+        editRxId = editId;
+        copyRxId = copyId;
+        prescribing = true;
+    }
+
+    private async Task PrescriptionSaved((int Id, bool Print) result)
+    {
+        prescribing = false;
+        if (result.Print)
+        {
+            // A full load, so the print page can open the print dialog once it has loaded.
+            Nav.NavigateTo($"recete/{result.Id}?yazdir=1", forceLoad: true);
+            return;
+        }
+        tab = "recete";
+        await Load();
+        _ = toast?.Show("Reçete kaydedildi.");
+    }
+
+    private async Task DeletePrescription(int rxId)
+    {
+        if (!finance) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.Prescriptions.Where(r => r.Id == rxId && r.PatientId == Id).ExecuteDeleteAsync();
+        deleteRxId = null;
+        await Load();
+    }
+
+    private void TogglePlan(int itemId)
+    {
+        if (!selectedPlan.Remove(itemId)) selectedPlan.Add(itemId);
+    }
+
+    /// <summary>Moves the chosen plan items into a "done today" visit; the ledger picks them up as charges.</summary>
+    private async Task CompleteSelected()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var items = await db.TreatmentItems.Include(i => i.TreatmentSession)
+            .Where(i => selectedPlan.Contains(i.Id) && i.TreatmentSession.PatientId == Id && i.TreatmentSession.Kind == TreatmentKind.Planned)
+            .ToListAsync();
+        if (items.Count == 0) return;
+
+        var session = new TreatmentSession
+        {
+            PatientId = Id,
+            Date = DateOnly.FromDateTime(DateTime.Today),
+            Kind = TreatmentKind.Completed,
+            DentistId = await Me.DentistIdAsync() ?? items.Select(i => i.TreatmentSession.DentistId).FirstOrDefault(d => d != null),
+        };
+        db.TreatmentSessions.Add(session);
+        var oldSessions = items.Select(i => i.TreatmentSession).Distinct().ToList();
+        foreach (var i in items)
+            i.TreatmentSession = session;
+        await db.SaveChangesAsync();
+        await RemoveEmptySessions(db, oldSessions.Select(s => s.Id));
+
+        var count = items.Count;
+        selectedPlan.Clear();
+        await Events.NotifyAsync();
+        _ = toast?.Show($"{count} işlem yapıldı olarak kaydedildi.");
+    }
+
+    private async Task DeleteSelected()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var items = await db.TreatmentItems
+            .Where(i => selectedPlan.Contains(i.Id) && i.TreatmentSession.PatientId == Id && i.TreatmentSession.Kind == TreatmentKind.Planned)
+            .ToListAsync();
+        var sessionIds = items.Select(i => i.TreatmentSessionId).Distinct().ToList();
+        db.TreatmentItems.RemoveRange(items);
+        await db.SaveChangesAsync();
+        await RemoveEmptySessions(db, sessionIds);
+        selectedPlan.Clear();
+        await Events.NotifyAsync();
+    }
+
+    private static async Task RemoveEmptySessions(DisciDbContext db, IEnumerable<int> ids)
+    {
+        var list = ids.ToList();
+        await db.TreatmentSessions.Where(s => list.Contains(s.Id) && !s.Items.Any() && s.LegacyId == null).ExecuteDeleteAsync();
+    }
+
+    private async Task PaymentSaved(int paymentId)
+    {
+        paying = false;
+        await Load();
+        _ = toast?.Show("Ödeme kaydedildi.");
+    }
+
+    private async Task TreatmentSaved()
+    {
+        treatmentKind = null;
+        await Load();
+        _ = toast?.Show("Tedavi kaydedildi.");
+    }
+
+    private async Task CancelPayment(int paymentId)
+    {
+        if (!finance) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Payments.FirstOrDefaultAsync(p => p.Id == paymentId && p.PatientId == Id) is { } pay)
+        {
+            pay.IsCancelled = true;
+            await db.SaveChangesAsync();
+        }
+        cancelPaymentId = null;
+        await Events.NotifyAsync();
+    }
+
+    private async Task ToggleArchive()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Patients.FindAsync(Id) is { } p)
+        {
+            p.IsArchived = !p.IsArchived;
+            await db.SaveChangesAsync();
+            _ = toast?.Show(p.IsArchived ? "Hasta arşive kaldırıldı." : "Hasta arşivden çıkarıldı.");
+        }
+        confirmArchive = false;
+        await Events.NotifyAsync();
+        await Load();
+    }
+
+    private async Task AddNote()
+    {
+        if (string.IsNullOrWhiteSpace(newNote)) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.PatientNotes.Add(new PatientNote { PatientId = Id, Text = newNote.Trim() });
+        await db.SaveChangesAsync();
+        newNote = null;
+        await Load();
+    }
+
+    public void Dispose() => Events.Changed -= OnChanged;
 }

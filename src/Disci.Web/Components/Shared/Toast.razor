@@ -1,0 +1,25 @@
+@implements IDisposable
+@if (text is not null)
+{
+    <div class="toast-x" role="status"><Icon Name="check-circle" /> @text</div>
+}
+
+@code {
+    private string? text;
+    private CancellationTokenSource? cts;
+
+    /// <summary>Shows a short confirmation for three seconds.</summary>
+    public async Task Show(string message)
+    {
+        cts?.Cancel();
+        cts = new CancellationTokenSource();
+        var token = cts.Token;
+        text = message;
+        StateHasChanged();
+        try { await Task.Delay(3000, token); } catch (TaskCanceledException) { return; }
+        text = null;
+        StateHasChanged();
+    }
+
+    public void Dispose() => cts?.Cancel();
+}

@@ -17,3 +17,6 @@ data/
 *.ldf
 *.bak
 *.csv
+
+# Kurulum paketi çıktısı
+dist/

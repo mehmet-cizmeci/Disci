@@ -1,16 +1,23 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
 @inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+@inject NotificationService Notifications
 
-<PageTitle>Ana sayfa - Disci</PageTitle>
+<PageTitle>Bugün - Disci</PageTitle>
 
-<h1 class="h3 mb-3">Ana sayfa</h1>
-
-<form action="hastalar" method="get" class="mb-4" role="search">
-    <div class="input-group input-group-lg">
-        <input name="ara" class="form-control" placeholder="Hasta ara: ad, soyad, telefon veya protokol no" aria-label="Hasta ara" />
-        <button class="btn btn-primary" type="submit">Ara</button>
+<div class="page-head">
+    <div>
+        <h1>@Greeting</h1>
+        <div class="sub">@Display.LongDate(Today)</div>
     </div>
-</form>
+    <div class="actions">
+        <a href="hastalar/yeni" class="btn btn-light"><Icon Name="user-plus" /> Yeni hasta</a>
+        <button class="btn btn-primary" @onclick="() => creating = true"><Icon Name="calendar-plus" /> Yeni randevu</button>
+    </div>
+</div>
 
 @if (stats is null)
 {
@@ -19,54 +26,310 @@
 else
 {
     <div class="row g-3 mb-4">
-        <StatCard Title="Kayıtlı hasta" Value="@stats.Patients.ToString("N0")" />
-        <StatCard Title="Bu ay yeni hasta" Value="@stats.NewPatientsThisMonth.ToString("N0")" />
-        <StatCard Title="Bu ay tedavi" Value="@Display.Money(stats.TreatmentsThisMonth)" />
-        <StatCard Title="Bu ay tahsilat" Value="@Display.Money(stats.PaymentsThisMonth)" />
+        <div class="col-6 col-xl-3">
+            <Kpi Title="Bugünkü randevular" Value="@agenda.Count(a => !Scheduling.Inactive.Contains(a.Status)).ToString()" IconName="calendar"
+                 Hint="@($"{agenda.Count(a => a.Status == AppointmentStatus.Completed)} tamamlandı")" />
+        </div>
+        <div class="col-6 col-xl-3">
+            <Kpi Title="Bekleme salonu" Value="@agenda.Count(a => a.Status == AppointmentStatus.Arrived).ToString()" IconName="clock" Tone="warning"
+                 Hint="@($"{agenda.Count(a => a.Status == AppointmentStatus.InChair)} hasta koltukta")" />
+        </div>
+        <div class="col-6 col-xl-3">
+            <Kpi Title="Bugünkü tahsilat" Value="@Display.Money(stats.PaidToday)" IconName="cash" Tone="success"
+                 Hint="@(finance ? $"Bu ay {Display.Money(stats.PaidThisMonth)}" : null)" />
+        </div>
+        <div class="col-6 col-xl-3">
+            @if (finance)
+            {
+                <Kpi Title="Toplam alacak" Value="@Display.Money(stats.Receivable)" IconName="wallet" Tone="danger"
+                     Hint="@($"Bu ay yapılan tedavi {Display.Money(stats.ProducedThisMonth)}")" />
+            }
+            else
+            {
+                <Kpi Title="Kayıtlı hasta" Value="@stats.Patients.ToString("N0")" IconName="users" Tone="info"
+                     Hint="@($"Bu ay {stats.NewPatientsThisMonth} yeni hasta")" />
+            }
+        </div>
     </div>
 
-    <h2 class="h5">Son işlem yapılan hastalar</h2>
-    <div class="list-group">
-        @foreach (var v in stats.RecentVisits)
-        {
-            <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="hastalar/@v.PatientId">
-                <span>@v.Name</span>
-                <span class="text-secondary small">@Display.Date(v.Date)</span>
-            </a>
-        }
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="panel">
+                <div class="panel-head">
+                    <Icon Name="calendar" />
+                    <h2>Bugünün randevuları</h2>
+                    <div class="actions">
+                        @if (dentistNames.Count > 1)
+                        {
+                            <button class="chip @(dentistFilter is null ? "active" : "")" @onclick="() => dentistFilter = null">Tümü</button>
+                            @foreach (var d in dentistNames)
+                            {
+                                <button class="chip @(dentistFilter == d ? "active" : "")" @onclick="() => dentistFilter = d">@d</button>
+                            }
+                        }
+                        <a href="randevular" class="btn btn-light btn-sm">Takvim</a>
+                    </div>
+                </div>
+                @if (agenda.Count == 0)
+                {
+                    <div class="empty"><Icon Name="calendar" /><div>Bugün için randevu yok.</div></div>
+                }
+                else
+                {
+                    <div class="list agenda">
+                        @foreach (var a in agenda.Where(a => dentistFilter is null || a.Dentist == dentistFilter))
+                        {
+                            <div class="list-row st @Display.Css(a.Status)">
+                                <div class="time-col">@Display.Time(a.Start)<small>@((int)(a.End - a.Start).TotalMinutes) dk</small></div>
+                                <span class="stripe"></span>
+                                <div class="grow">
+                                    <div class="title">
+                                        @if (a.PatientId is { } pid)
+                                        {
+                                            <a href="hastalar/@pid" class="text-body">@a.Name</a>
+                                        }
+                                        else
+                                        {
+                                            @a.Name <span class="chip chip-muted ms-1">Kayıtsız</span>
+                                        }
+                                        @if (a.Balance > 0)
+                                        {
+                                            <span class="chip chip-danger ms-1" title="Kalan borç">@Display.Money(a.Balance)</span>
+                                        }
+                                    </div>
+                                    <div class="meta">
+                                        @a.Dentist @(a.Type is null ? "" : $"· {a.Type}")
+                                        @if (a.Status == AppointmentStatus.Arrived && a.ArrivedAt is { } t)
+                                        {
+                                            <span class="text-warning fw-650"> · @((int)(DateTime.Now - t).TotalMinutes) dk bekliyor</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="row-actions">
+                                    <StatusBadge Status="a.Status" />
+                                    @if (Scheduling.NextStep(a.Status) is { } next)
+                                    {
+                                        <button class="btn btn-sm @(next == AppointmentStatus.Arrived ? "btn-primary" : "btn-soft")" @onclick="() => SetStatus(a.Id, next)">@Display.Action(next)</button>
+                                    }
+                                    @if (a.Status is AppointmentStatus.Scheduled or AppointmentStatus.Confirmed)
+                                    {
+                                        <button class="btn btn-sm btn-light" title="Gelmedi" @onclick="() => SetStatus(a.Id, AppointmentStatus.NoShow)"><Icon Name="x" Class="ico-sm" /></button>
+                                    }
+                                    <button class="btn btn-sm btn-light" title="Düzenle" @onclick="() => editId = a.Id"><Icon Name="edit" Class="ico-sm" /></button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-lg-4 d-flex flex-column gap-4">
+            <div class="panel">
+                <div class="panel-head"><Icon Name="chair" /><h2>Bekleme salonu ve koltuk</h2></div>
+                @{ var room = agenda.Where(a => a.Status is AppointmentStatus.Arrived or AppointmentStatus.InChair).ToList(); }
+                @if (room.Count == 0)
+                {
+                    <div class="empty py-4">Şu an bekleyen hasta yok.</div>
+                }
+                else
+                {
+                    <div class="list">
+                        @foreach (var a in room)
+                        {
+                            <div class="list-row st @Display.Css(a.Status)">
+                                <span class="avatar avatar-sm">@Display.Initials(a.Name)</span>
+                                <div class="grow">
+                                    <div class="title">@a.Name</div>
+                                    <div class="meta">@a.Dentist · @Display.Name(a.Status)
+                                        @if (a.ArrivedAt is { } t) { <text> · @((int)(DateTime.Now - t).TotalMinutes) dk</text> }
+                                    </div>
+                                </div>
+                                @if (Scheduling.NextStep(a.Status) is { } next)
+                                {
+                                    <button class="btn btn-sm btn-soft" @onclick="() => SetStatus(a.Id, next)">@Display.Action(next)</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <Icon Name="bell" /><h2>Yapılacaklar</h2>
+                    <div class="actions"><a href="bildirimler" class="small">Tümü</a></div>
+                </div>
+                @if (noticeGroups.Count == 0)
+                {
+                    <div class="empty py-4"><Icon Name="check-circle" /><div>Bekleyen iş yok.</div></div>
+                }
+                else
+                {
+                    <div class="list">
+                        @foreach (var g in noticeGroups)
+                        {
+                            <a class="list-row" href="bildirimler#@g.Key">
+                                <span class="notice-dot @g.First().Tone.ToString().ToLowerInvariant()"></span>
+                                <span class="grow title">@NotificationService.GroupTitle(g.Key)</span>
+                                <span class="chip">@g.Count()</span>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="panel">
+                <div class="panel-head"><Icon Name="repeat" /><h2>Son işlem yapılan hastalar</h2></div>
+                <div class="list">
+                    @foreach (var v in stats.RecentVisits)
+                    {
+                        <a class="list-row" href="hastalar/@v.PatientId">
+                            <span class="avatar avatar-sm">@Display.Initials(v.Name)</span>
+                            <span class="grow title">@v.Name</span>
+                            <span class="meta">@Display.Date(v.Date)</span>
+                        </a>
+                    }
+                </div>
+                <div class="px-3 py-2 small text-secondary border-top">Kayıtlı hasta: <span class="fw-650 text-body">@stats.Patients</span></div>
+            </div>
+        </div>
     </div>
+}
+
+@if (creating || editId is not null)
+{
+    <AppointmentEditor AppointmentId="editId" OnSaved="Saved" OnClose="CloseEditor" />
 }
 
 @code {
     private Stats? stats;
+    private List<AgendaItem> agenda = [];
+    private List<string> dentistNames = [];
+    private string? dentistFilter;
+    private List<IGrouping<NoticeKind, Notice>> noticeGroups = [];
+    private bool finance, creating;
+    private int? editId;
+    private PeriodicTimer? timer;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private static string Greeting => DateTime.Now.Hour switch
+    {
+        < 12 => "Günaydın",
+        < 18 => "İyi günler",
+        _ => "İyi akşamlar",
+    };
 
     private sealed record Visit(int PatientId, string Name, DateOnly Date);
 
-    private sealed record Stats(int Patients, int NewPatientsThisMonth, decimal TreatmentsThisMonth, decimal PaymentsThisMonth, List<Visit> RecentVisits);
+    private sealed record Stats(int Patients, int NewPatientsThisMonth, decimal PaidToday, decimal PaidThisMonth,
+        decimal ProducedThisMonth, decimal Receivable, List<Visit> RecentVisits);
+
+    private sealed record AgendaItem(int Id, int? PatientId, string Name, string Dentist, string? Type, DateTime Start, DateTime End,
+        AppointmentStatus Status, DateTime? ArrivedAt, decimal Balance);
 
     protected override async Task OnInitializedAsync()
     {
+        finance = await Me.CanSeeFinanceAsync();
+        await Load();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+        Events.Changed += OnChanged;
+        timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        _ = Tick();
+    }
+
+    private async Task Tick()
+    {
+        try
+        {
+            while (timer is not null && await timer.WaitForNextTickAsync())
+                await InvokeAsync(StateHasChanged);
+        }
+        catch (ObjectDisposedException) { }
+    }
+
+    private Task OnChanged() => InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    private async Task Load()
+    {
         await using var db = await DbFactory.CreateDbContextAsync();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = Today;
         var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var dayStart = DateTime.Today;
+
+        var rows = await db.Appointments.AsNoTracking()
+            .Where(a => a.Start >= dayStart && a.Start < dayStart.AddDays(1) && a.Status != AppointmentStatus.Cancelled)
+            .OrderBy(a => a.Start)
+            .Select(a => new
+            {
+                a.Id, a.PatientId, a.Start, a.End, a.Status, a.ArrivedAt,
+                Name = a.Patient == null ? a.GuestName : a.Patient.FirstName + " " + a.Patient.LastName,
+                Dentist = a.Dentist.FullName,
+                Type = a.AppointmentType == null ? null : a.AppointmentType.Name,
+            })
+            .ToListAsync();
+        var ids = rows.Where(r => r.PatientId != null).Select(r => r.PatientId!.Value).Distinct().ToList();
+        var balances = ids.Count == 0 ? [] : await Ledger.Balances(db).Where(b => ids.Contains(b.PatientId)).ToDictionaryAsync(b => b.PatientId, b => b.Remaining);
+        agenda = rows.Select(r => new AgendaItem(r.Id, r.PatientId, r.Name ?? "", r.Dentist, r.Type, r.Start, r.End, r.Status, r.ArrivedAt,
+            r.PatientId is { } p ? balances.GetValueOrDefault(p) : 0)).ToList();
+        dentistNames = agenda.Select(a => a.Dentist).Distinct().Order().ToList();
 
         var recent = await db.TreatmentSessions
             .Where(s => s.Kind == TreatmentKind.Completed && s.Date <= today)
             .GroupBy(s => s.PatientId)
             .Select(g => new { PatientId = g.Key, Date = g.Max(s => s.Date) })
-            .OrderByDescending(x => x.Date).Take(10)
+            .OrderByDescending(x => x.Date).Take(6)
             .Join(db.Patients, x => x.PatientId, p => p.Id, (x, p) => new { x.PatientId, p.FirstName, p.LastName, x.Date })
             .ToListAsync();
 
+        var payments = db.Payments.Where(p => !p.IsCancelled && p.Currency == Currencies.Try);
         stats = new Stats(
             await db.Patients.CountAsync(p => !p.IsArchived),
             await db.Patients.CountAsync(p => p.RegisteredOn >= monthStart),
-            await db.TreatmentItems
-                .Where(i => i.TreatmentSession.Kind == TreatmentKind.Completed && i.TreatmentSession.Date >= monthStart && i.Currency == Currencies.Try)
-                .SumAsync(i => (decimal?)i.Price) ?? 0,
-            await db.Payments
-                .Where(p => p.Date >= monthStart && !p.IsCancelled && p.Currency == Currencies.Try)
-                .SumAsync(p => (decimal?)p.Amount) ?? 0,
+            await payments.Where(p => p.Date == today).SumAsync(p => (decimal?)p.Amount) ?? 0,
+            finance ? await payments.Where(p => p.Date >= monthStart).SumAsync(p => (decimal?)p.Amount) ?? 0 : 0,
+            finance
+                ? await db.TreatmentItems
+                    .Where(i => i.TreatmentSession.Kind == TreatmentKind.Completed && i.TreatmentSession.Date >= monthStart && i.Currency == Currencies.Try)
+                    .SumAsync(i => (decimal?)i.Price) ?? 0
+                : 0,
+            finance ? await Ledger.Balances(db).Where(b => b.Charged - b.Paid > 0).SumAsync(b => (decimal?)(b.Charged - b.Paid)) ?? 0 : 0,
             recent.Select(r => new Visit(r.PatientId, $"{r.FirstName} {r.LastName}", r.Date)).ToList());
+
+        var role = NotificationService.RoleFor(await Me.PrincipalAsync());
+        noticeGroups = (await Notifications.GetAsync(includeLowPriority: true, role)).GroupBy(n => n.Kind).OrderBy(g => g.Key).ToList();
+    }
+
+    private async Task SetStatus(int id, AppointmentStatus status)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Appointments.FindAsync(id) is not { } a) return;
+        Scheduling.SetStatus(a, status, DateTime.Now);
+        await db.SaveChangesAsync();
+        await Events.NotifyAsync();
+    }
+
+    private void CloseEditor()
+    {
+        creating = false;
+        editId = null;
+    }
+
+    private async Task Saved()
+    {
+        CloseEditor();
+        await Load();
+    }
+
+    public void Dispose()
+    {
+        Events.Changed -= OnChanged;
+        timer?.Dispose();
+        timer = null;
     }
 }

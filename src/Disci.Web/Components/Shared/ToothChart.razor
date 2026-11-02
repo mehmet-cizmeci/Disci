@@ -1,0 +1,76 @@
+@* FDI tooth chart. Read-only it colours teeth by treatment state; with Selectable it is a multi-tooth picker. *@
+<div class="odonto-scroll">
+    @foreach (var (rows, lower) in Layout)
+    {
+        <div class="odonto @(lower ? "lower" : "") mb-1">
+            @foreach (var t in rows)
+            {
+                if (t == 0)
+                {
+                    <span></span>
+                }
+                else if (Selectable)
+                {
+                    <button type="button" class="tooth @Css(t)" title="Diş @t" @onclick="() => Toggle(t)">
+                        @if (!lower) { @t }
+                        <span class="mark"></span>
+                        @if (lower) { @t }
+                    </button>
+                }
+                else
+                {
+                    <div class="tooth @Css(t)" title="@(Titles?.GetValueOrDefault(t) ?? $"Diş {t}")">
+                        @if (!lower) { @t }
+                        <span class="mark"></span>
+                        @if (lower) { @t }
+                    </div>
+                }
+            }
+        </div>
+        @if (!lower)
+        {
+            <div class="odonto"><div class="gap"></div></div>
+        }
+    }
+</div>
+@if (Selectable)
+{
+    <div class="form-check form-switch mt-2 small">
+        <input class="form-check-input" type="checkbox" id="deciduous-@uid" @bind="deciduous" />
+        <label class="form-check-label" for="deciduous-@uid">Süt dişleri</label>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Selectable { get; set; }
+    [Parameter] public HashSet<int> Selected { get; set; } = [];
+    [Parameter] public EventCallback<HashSet<int>> SelectedChanged { get; set; }
+    /// <summary>Tooth → CSS classes (done, plan, finding) for the read-only view.</summary>
+    [Parameter] public Dictionary<int, string>? Marks { get; set; }
+    [Parameter] public Dictionary<int, string>? Titles { get; set; }
+
+    private bool deciduous;
+    private readonly string uid = Guid.NewGuid().ToString("N")[..6];
+
+    private static readonly int[] UpperPermanent = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+    private static readonly int[] LowerPermanent = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+    // Deciduous teeth sit under the matching permanent ones; zeros keep the 16-column grid aligned.
+    private static readonly int[] UpperDeciduous = [0, 0, 0, 55, 54, 53, 52, 51, 61, 62, 63, 64, 65, 0, 0, 0];
+    private static readonly int[] LowerDeciduous = [0, 0, 0, 85, 84, 83, 82, 81, 71, 72, 73, 74, 75, 0, 0, 0];
+
+    private bool ShowDeciduous => deciduous || (Marks?.Keys.Any(t => t > 50) ?? false) || Selected.Any(t => t > 50);
+
+    private IEnumerable<(int[] Rows, bool Lower)> Layout => ShowDeciduous
+        ? [(UpperPermanent, false), (UpperDeciduous, false), (LowerDeciduous, true), (LowerPermanent, true)]
+        : [(UpperPermanent, false), (LowerPermanent, true)];
+
+    private string Css(int t) => Selected.Contains(t) ? "sel" : Marks?.GetValueOrDefault(t) ?? "";
+
+    private async Task Toggle(int t)
+    {
+        var next = new HashSet<int>(Selected);
+        if (!next.Remove(t)) next.Add(t);
+        Selected = next;
+        await SelectedChanged.InvokeAsync(next);
+    }
+}

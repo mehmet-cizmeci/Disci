@@ -2,60 +2,50 @@
 
 @inject NavigationManager NavigationManager
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Disci</a>
+<a class="side-brand" href="">
+    <span class="logo"><Icon Name="tooth" /></span>
+    <span>Disci<small>Diş kliniği yönetimi</small></span>
+</a>
+
+<nav class="side-nav">
+    <AuthorizeView>
+        <Authorized>
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All"><Icon Name="home" /> Bugün</NavLink>
+            <NavLink class="nav-link" href="randevular"><Icon Name="calendar" /> Randevular</NavLink>
+            <NavLink class="nav-link" href="hastalar"><Icon Name="users" /> Hastalar</NavLink>
+            <NavLink class="nav-link" href="receteler"><Icon Name="pill" /> Reçeteler</NavLink>
+            <NavLink class="nav-link" href="bildirimler"><Icon Name="bell" /> Bildirimler ve görevler</NavLink>
+
+            <AuthorizeView Roles="@($"{Roles.Admin},{Roles.Dentist}")" Context="finance">
+                <div class="side-label">Finans</div>
+                <NavLink class="nav-link" href="kasa"><Icon Name="wallet" /> Kasa ve tahsilat</NavLink>
+                <NavLink class="nav-link" href="fiyatlar"><Icon Name="tag" /> Fiyat listeleri</NavLink>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="@Roles.Admin" Context="admin">
+                <div class="side-label">Yönetim</div>
+                <NavLink class="nav-link" href="ayarlar"><Icon Name="settings" /> Klinik ayarları</NavLink>
+                <NavLink class="nav-link" href="yonetim/kullanicilar"><Icon Name="shield" /> Kullanıcılar</NavLink>
+            </AuthorizeView>
+        </Authorized>
+        <NotAuthorized>
+            <NavLink class="nav-link" href="Account/Login"><Icon Name="user" /> Giriş</NavLink>
+        </NotAuthorized>
+    </AuthorizeView>
+</nav>
+
+<AuthorizeView>
+    <div class="side-foot">
+        <NavLink class="nav-link d-flex align-items-center gap-2 px-2 py-2 text-body" href="Account/Manage"><Icon Name="user" /> Hesabım</NavLink>
+        <form action="Account/Logout" method="post">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+            <button type="submit" class="btn btn-link text-secondary d-flex align-items-center gap-2 px-2 text-decoration-none">
+                <Icon Name="logout" /> Çıkış
+            </button>
+        </form>
     </div>
-</div>
-
-<input type="checkbox" title="Menü" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Ana sayfa
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="hastalar">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Hastalar
-                    </NavLink>
-                </div>
-                <AuthorizeView Roles="@Roles.Admin" Context="admin">
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="yonetim/kullanicilar">
-                            <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Kullanıcılar
-                        </NavLink>
-                    </div>
-                </AuthorizeView>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Hesabım
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Çıkış
-                        </button>
-                    </form>
-                </div>
-            </Authorized>
-            <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Giriş
-                    </NavLink>
-                </div>
-            </NotAuthorized>
-        </AuthorizeView>
-    </nav>
-</div>
+</AuthorizeView>
 
 @code {
     private string? currentUrl;
