@@ -5,13 +5,13 @@ namespace Disci.Web.Tests;
 /// <summary>Checks on the .razor sources for binding mistakes that compile and render fine but silently lose input.</summary>
 public sealed partial class MarkupRuleTests
 {
-    private static IEnumerable<string> RazorFiles()
+    /// <summary>The source tree, found from this file's path so it works wherever the tests were built.</summary>
+    private static IEnumerable<string> RazorFiles([System.Runtime.CompilerServices.CallerFilePath] string here = "")
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Disci.Web")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Directory.EnumerateFiles(Path.Combine(dir.FullName, "src", "Disci.Web", "Components"), "*.razor", SearchOption.AllDirectories);
+        var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+        var components = Path.Combine(root, "src", "Disci.Web", "Components");
+        Assert.True(Directory.Exists(components), components);
+        return Directory.EnumerateFiles(components, "*.razor", SearchOption.AllDirectories);
     }
 
     /// <summary>

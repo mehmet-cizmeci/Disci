@@ -4,6 +4,9 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* Must run before any browser extension: some (e.g. Firefox "WebSocketSniff") replace window.WebSocket at
+       document end with a wrapper Blazor cannot use, and every button on the page stops working. *@
+    <script>window.__disciWebSocket = window.WebSocket;</script>
     <base href="/" />
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
@@ -17,7 +20,15 @@
 <body>
     <Routes />
     <ReconnectModal />
-    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_framework/blazor.web.js"]" autostart="false"></script>
+    <script>
+        // Connect with the browser's own WebSocket captured above, whatever an extension did to window.WebSocket since.
+        Blazor.start({
+            circuit: {
+                configureSignalR: builder => builder.withUrl('_blazor', { WebSocket: window.__disciWebSocket || window.WebSocket })
+            }
+        });
+    </script>
     <script>
         // Close the phone/tablet side menu once a link in it is followed.
         document.addEventListener('click', e => {

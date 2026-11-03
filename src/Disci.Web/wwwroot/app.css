@@ -327,20 +327,31 @@ a.list-row:hover, .list-row.hover:hover { background: var(--c-surface-2); }
 .legend { display: flex; flex-wrap: wrap; gap: .4rem; }
 
 /* ---------- Tooth chart (FDI) ---------- */
-.odonto { display: grid; grid-template-columns: repeat(16, minmax(28px, 1fr)); gap: 4px; }
-.odonto .gap { grid-column: span 16; height: 6px; border-bottom: 1px dashed var(--c-border); margin-bottom: 6px; }
-.tooth { border: 1px solid var(--c-border-strong); background: var(--c-surface); border-radius: 8px 8px 12px 12px; padding: 4px 0 3px; text-align: center; font-size: .72rem; font-weight: 650; color: var(--c-muted); position: relative; user-select: none; }
-.odonto.lower .tooth { border-radius: 12px 12px 8px 8px; }
-button.tooth { cursor: pointer; }
-button.tooth:hover { border-color: var(--c-primary); color: var(--c-primary); }
-.tooth.sel { background: var(--c-primary); border-color: var(--c-primary); color: #fff; }
-.tooth.done { background: var(--c-success-soft); border-color: #86efac; color: var(--c-success); }
-.tooth.plan { background: var(--c-info-soft); border-color: #93c5fd; color: #1d4ed8; }
-.tooth.finding { background: #f1f5f9; border-color: #94a3b8; color: #475569; }
-.tooth.done.plan { background: linear-gradient(135deg, var(--c-success-soft) 50%, var(--c-info-soft) 50%); }
-.tooth .mark { display: block; width: 14px; height: 18px; margin: 2px auto 0; border-radius: 4px 4px 6px 6px; background: currentColor; opacity: .18; }
-.odonto-scroll { overflow-x: auto; }
-.odonto-scroll .odonto { min-width: 560px; }
+/* Tooth chart: the two dental arches as SVG (Shared/ToothChart.razor). */
+.arch-wrap { max-width: 560px; margin: 0 auto; }
+.modal-x .arch-wrap { max-width: 440px; }
+.arch { width: 100%; height: auto; display: block; overflow: visible; }
+.arch .t .crown { fill: var(--c-surface); stroke: var(--c-border-strong); stroke-width: 1.4; transition: fill .12s, stroke .12s; }
+.arch .t .cusp { fill: none; stroke: currentColor; stroke-width: 1; opacity: .35; stroke-linecap: round; }
+.arch .t { color: var(--c-muted); outline: none; }
+.arch.selectable .t { cursor: pointer; }
+.arch.selectable .t:hover .crown, .arch.selectable .t:focus-visible .crown { stroke: var(--c-primary); stroke-width: 2.2; }
+.arch .t.done .crown { fill: #bbf7d0; stroke: #16a34a; }
+.arch .t.done { color: #15803d; }
+.arch .t.plan .crown { fill: #bfdbfe; stroke: #2563eb; }
+.arch .t.plan { color: #1d4ed8; }
+.arch .t.done.plan .crown { fill: #bbf7d0; stroke: #2563eb; stroke-dasharray: 3 2; stroke-width: 2; }
+.arch .t.finding .crown { fill: #e2e8f0; stroke: #64748b; }
+.arch .t.sel .crown { fill: var(--c-primary); stroke: var(--c-primary); }
+.arch .t.sel { color: #fff; }
+.arch .t.sel .cusp { opacity: .6; }
+.arch .t-num { font-size: 11px; font-weight: 650; fill: var(--c-muted); pointer-events: none; user-select: none; }
+.arch .t-num.sel { fill: var(--c-primary); font-weight: 800; }
+.arch .t-num.done { fill: #15803d; }
+.arch .t-num.plan { fill: #1d4ed8; }
+.arch-side { font-size: 11px; font-weight: 700; letter-spacing: .08em; fill: var(--c-faint, #94a3b8); }
+.arch-jaw { font-size: 12px; font-weight: 600; fill: var(--c-faint, #94a3b8); }
+.arch-mid { stroke: var(--c-border-strong); stroke-dasharray: 3 4; }
 
 /* ---------- Misc ---------- */
 .dl-grid { display: grid; grid-template-columns: minmax(130px, 32%) 1fr; gap: .55rem 1rem; margin: 0; font-size: .92rem; }
