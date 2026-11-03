@@ -103,8 +103,7 @@ else
         get
         {
             var words = (term ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return Catalog.Where(m => words.All(w => m.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                                     || (m.Code?.Contains(w, StringComparison.CurrentCultureIgnoreCase) ?? false))).Take(8);
+            return Catalog.Where(m => words.All(w => TextSearch.Contains(m.Name, w) || TextSearch.Contains(m.Code, w))).Take(8);
         }
     }
 

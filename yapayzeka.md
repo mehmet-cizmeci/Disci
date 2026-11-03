@@ -214,6 +214,9 @@ tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesab�
 - `disabled="@string.IsNullOrWhiteSpace(x)"` olan bir düğme, `x` varsayılan `@bind` (onchange) ile bağlıysa yazarken pasif kalır; ilk tıklama yalnızca alanı bulanıklaştırır ve boşa gider. Bu tür alanlara `@bind:event="oninput"` verin.
 - Uzun formlarda sayfa başlığındaki Kaydet düğmesi yapışkan üst çubuğun altına kayıyordu (oraya tıklayan "Hesabım"a gidip veriyi kaybediyordu); `.page-head.sticky` kullanın.
 - Tarayıcı testi: `BrowserTestServer` + başsız Chrome + küçük CDP betiği (Node yerleşik WebSocket). Tıklamayı `elementFromPoint` ile doğrulayın (örtülü düğmeyi yakalar); Bootstrap `scroll-behavior: smooth` yüzünden kaydırmada `behavior:'instant'` verin; başlıklar CSS ile büyük harfe çevrildiği için `innerText` yerine `textContent` ile eşleyin; sidebar'daki Çıkış da `button[type=submit]`'tir.
+- 2026-11-03 (gerçek veri kopyasıyla test): Eski programda isimler çoğunlukla Türkçe harfsiz girilmiş ("Ayse", "YILMAZ"; isimlerde ş yalnızca 3, ı 2.112 kez geçiyor). Veritabanı harmanlaması `SQL_Latin1_General_CP1_CI_AS` ı/I ve ş/s'yi farklı saydığı için "yılmaz" 9, "YILMAZ" 73 sonuç veriyordu. Bütün metin aramaları `Services/TextSearch.cs` üzerinden yapılır: SQL tarafında sütun iç içe `REPLACE` ile, arama kelimesi `Fold` ile sadeleştirilir; bellekteki listelerde `TextSearch.Contains`. `CurrentCultureIgnoreCase` kullanmayın (tr-TR'de "implant" ≠ "IMPLANT").
+- Hasta aramasında sayı kuralı: 0 ile başlamayan en fazla 6 haneli sayı protokol no; 0 ile başlayan veya daha uzun sayı telefon (boşluklu yazılsa da tek numara; baştaki tek 0 atılır). Testler: `SearchTests`.
+- Gerçek veriyle test: `Disci`'nin `COPY_ONLY` yedeği `data/` altında `Disci_TestKopya` olarak açılır, `DisciWebFactory` benzeri geçici bir fabrika (test kimliği, tohum veri yok) bu kopyaya bağlanır; iş bitince kopya ve yedek silinir. Betikler hasta adı yazdırmaz.
 
 ## Açık sorular (kullanıcıya sorulacak)
 

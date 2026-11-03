@@ -222,7 +222,7 @@ else
         {
             var words = (term ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
             return rows.Where(r => (string.IsNullOrEmpty(category) || r.Category == category)
-                                   && words.All(w => r.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase) || r.Code.Contains(w, StringComparison.CurrentCultureIgnoreCase)));
+                                   && words.All(w => TextSearch.Contains(r.Name, w) || TextSearch.Contains(r.Code, w)));
         }
     }
 

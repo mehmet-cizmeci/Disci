@@ -146,8 +146,7 @@
         get
         {
             var words = (procTerm ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return procedures.Where(p => words.All(w => p.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                                       || p.Code.Contains(w, StringComparison.CurrentCultureIgnoreCase))).Take(10);
+            return procedures.Where(p => words.All(w => TextSearch.Contains(p.Name, w) || TextSearch.Contains(p.Code, w))).Take(10);
         }
     }
 

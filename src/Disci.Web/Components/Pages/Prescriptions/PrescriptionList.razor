@@ -255,7 +255,7 @@ else
         get
         {
             var words = (medTerm ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return medications.Where(m => words.All(w => m.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)));
+            return medications.Where(m => words.All(w => TextSearch.Contains(m.Name, w) || TextSearch.Contains(m.Code, w)));
         }
     }
 
@@ -288,7 +288,7 @@ else
         if (dentistFilter != 0)
             q = q.Where(p => p.DentistId == dentistFilter);
         foreach (var w in (term ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            q = q.Where(p => p.Patient.FirstName.Contains(w) || p.Patient.LastName.Contains(w) || p.Items.Any(i => i.MedicationName.Contains(w)));
+            q = q.Where(TextSearch.AnyContains<Prescription>(w, p => p.Items.Any(i => i.MedicationName.Contains(w)), p => p.Patient.FirstName, p => p.Patient.LastName));
 
         var list = await q.OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(200)
             .Select(p => new
