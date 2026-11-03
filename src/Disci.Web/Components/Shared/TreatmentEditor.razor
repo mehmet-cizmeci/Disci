@@ -108,7 +108,7 @@
     </ChildContent>
     <Footer>
         <button type="button" class="btn btn-light" @onclick="OnClose">Vazgeç</button>
-        <button type="button" class="btn btn-primary" disabled="@(saving || lines.Count == 0)" @onclick="Save">
+        <button type="button" class="btn btn-primary" disabled="@(saving || (lines.Count == 0 && string.IsNullOrWhiteSpace(procTerm)))" @onclick="Save">
             <Icon Name="check" /> @(kind == TreatmentKind.Completed ? "Yapıldı olarak kaydet" : kind == TreatmentKind.Planned ? "Plana ekle" : "Bulguyu kaydet")
         </button>
     </Footer>
@@ -208,6 +208,12 @@
 
     private async Task Save()
     {
+        // A procedure typed or picked but not yet added with "Ekle" is what the user means to save.
+        if (!string.IsNullOrWhiteSpace(procTerm))
+        {
+            AddLine();
+            if (error is not null) return;
+        }
         if (lines.Count == 0) return;
         saving = true;
         try

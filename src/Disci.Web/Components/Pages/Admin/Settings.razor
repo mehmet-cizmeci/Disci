@@ -82,8 +82,8 @@
                 <div class="col-sm-6"><label class="form-label" for="d-dip">Diploma no</label><input id="d-dip" class="form-control" @bind="dentist.DiplomaNo" /></div>
                 <div class="col-sm-6"><label class="form-label" for="d-phone">Telefon</label><input id="d-phone" class="form-control" @bind="dentist.Phone" /></div>
                 <div class="col-sm-6"><label class="form-label" for="d-mail">E-posta</label><input id="d-mail" class="form-control" @bind="dentist.Email" /></div>
-                <div class="col-6"><label class="form-label" for="d-ws">Mesai başlangıcı</label><input id="d-ws" type="time" class="form-control" @bind="dentist.WorkStart" @bind:format="HH:mm" /></div>
-                <div class="col-6"><label class="form-label" for="d-we">Mesai bitişi</label><input id="d-we" type="time" class="form-control" @bind="dentist.WorkEnd" @bind:format="HH:mm" /></div>
+                <div class="col-6"><label class="form-label" for="d-ws">Mesai başlangıcı</label><input id="d-ws" type="time" class="form-control" @bind="dentist.WorkStart" /></div>
+                <div class="col-6"><label class="form-label" for="d-we">Mesai bitişi</label><input id="d-we" type="time" class="form-control" @bind="dentist.WorkEnd" /></div>
                 <div class="col-12 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" id="d-active" @bind="dentist.IsActive" /><label class="form-check-label" for="d-active">Etkin (takvimde görünür)</label></div>
             </div>
             @if (error is not null) { <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div> }

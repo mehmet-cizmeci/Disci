@@ -136,7 +136,7 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label" for="tk-title">Görev</label>
-                    <input id="tk-title" class="form-control" placeholder="Örn. laboratuvardan kron gelince hastayı ara" @bind="newTask.Title" />
+                    <input id="tk-title" class="form-control" placeholder="Örn. laboratuvardan kron gelince hastayı ara" @bind="newTask.Title" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-6">
                     <label class="form-label" for="tk-date">Tarih</label>

@@ -12,7 +12,7 @@
     </div>
     <div class="actions">
         <button class="btn btn-light" @onclick="() => copying = true" disabled="@(current is null)"><Icon Name="plus" /> Listeyi kopyala</button>
-        <button class="btn btn-primary" @onclick="() => adding = new()"><Icon Name="plus" /> Yeni işlem</button>
+        <button class="btn btn-primary" @onclick="() => { error = null; adding = new(); }"><Icon Name="plus" /> Yeni işlem</button>
     </div>
 </div>
 
@@ -65,10 +65,14 @@ else
                         </select>
                         <div class="d-flex gap-1 align-items-center">
                             <div class="input-group" style="width:150px">
-                                <input type="number" step="1" class="form-control" placeholder="%" @bind="raise" aria-label="Zam oranı" />
+                                <input type="number" step="1" class="form-control" placeholder="%" @bind="raise" @bind:event="oninput" aria-label="Zam oranı" />
                                 <span class="input-group-text">%</span>
                             </div>
                             <button class="btn btn-soft" disabled="@(raise is null or 0)" @onclick="() => confirmRaise = true"><Icon Name="percent" /> Toplu güncelle</button>
+                        </div>
+                        <div class="form-check form-switch small m-0">
+                            <input class="form-check-input" type="checkbox" id="show-inactive" @bind="showInactive" @bind:after="() => Load(current?.Id)" />
+                            <label class="form-check-label" for="show-inactive">Kaldırılanları göster</label>
                         </div>
                         @if (!current.IsDefault)
                         {
@@ -83,7 +87,11 @@ else
                                 {
                                     <tr>
                                         <td class="text-secondary small">@r.Code</td>
-                                        <td>@r.Name @if (r.Kind == ProcedureKind.Finding) { <span class="chip ms-1">Bulgu</span> }</td>
+                                        <td>
+                                            @r.Name @if (r.Kind == ProcedureKind.Finding) { <span class="chip ms-1">Bulgu</span> }
+                                            @if (!r.IsActive) { <span class="chip chip-muted ms-1">Kaldırıldı</span> }
+                                            <button class="btn btn-sm btn-link p-0 ms-1 align-baseline" title="İşlemi düzenle" @onclick="() => EditProcedure(r)"><Icon Name="edit" Class="ico-sm" /></button>
+                                        </td>
                                         <td class="text-secondary small">@r.Category</td>
                                         <td class="text-end">
                                             <input type="number" min="0" step="0.01" class="form-control form-control-sm text-end tabular @(r.Price is null ? "text-secondary" : "")"
@@ -104,7 +112,7 @@ else
 
 @if (adding is not null)
 {
-    <Modal Title="Yeni işlem" OnClose="() => adding = null">
+    <Modal Title="@(adding.Id == 0 ? "Yeni işlem" : "İşlemi düzenle")" OnClose="() => adding = null">
         <ChildContent>
             <div class="row g-3">
                 <div class="col-sm-4">
@@ -122,16 +130,26 @@ else
                         @foreach (var c in rows.Select(r => r.Category).Distinct().Order()) { <option value="@c"></option> }
                     </datalist>
                 </div>
-                <div class="col-sm-6">
-                    <label class="form-label" for="np-price">Ücret (@current?.Name)</label>
-                    <input id="np-price" type="number" min="0" step="0.01" class="form-control" @bind="adding.Price" />
-                </div>
+                @if (adding.Id == 0)
+                {
+                    <div class="col-sm-6">
+                        <label class="form-label" for="np-price">Ücret (@current?.Name)</label>
+                        <input id="np-price" type="number" min="0" step="0.01" class="form-control" @bind="adding.Price" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12 form-check form-switch ms-2">
+                        <input class="form-check-input" type="checkbox" id="np-active" @bind="adding.IsActive" />
+                        <label class="form-check-label" for="np-active">Etkin (kapatılırsa fiyat listelerinde ve tedavi penceresinde görünmez; eski kayıtlar korunur)</label>
+                    </div>
+                }
             </div>
             @if (error is not null) { <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div> }
         </ChildContent>
         <Footer>
             <button class="btn btn-light" @onclick="() => adding = null">Vazgeç</button>
-            <button class="btn btn-primary" @onclick="AddProcedure"><Icon Name="check" /> Kaydet</button>
+            <button class="btn btn-primary" @onclick="SaveProcedure"><Icon Name="check" /> Kaydet</button>
         </Footer>
     </Modal>
 }
@@ -142,7 +160,7 @@ else
         <ChildContent>
             <p class="small text-secondary">"@current?.Name" listesindeki bütün fiyatlarla yeni bir liste açılır. Kurumlara veya kampanyalara özel tarifeler için kullanın.</p>
             <label class="form-label" for="cp-name">Yeni liste adı</label>
-            <input id="cp-name" class="form-control" @bind="copyName" />
+            <input id="cp-name" class="form-control" @bind="copyName" @bind:event="oninput" />
         </ChildContent>
         <Footer>
             <button class="btn btn-light" @onclick="() => copying = false">Vazgeç</button>
@@ -155,7 +173,7 @@ else
 {
     <Modal Title="Toplu fiyat güncelleme" OnClose="() => confirmRaise = false">
         <ChildContent>
-            <p class="m-0">"@current?.Name" listesindeki @Filtered.Count(r => r.Price is not null) fiyat <b>%@raise</b> @(raise > 0 ? "artırılacak" : "düşürülecek") ve tam liraya yuvarlanacak
+            <p class="m-0">"@current?.Name" listesindeki @Filtered.Count(r => r.Price is not null && r.IsActive) fiyat <b>%@raise</b> @(raise > 0 ? "artırılacak" : "düşürülecek") ve tam liraya yuvarlanacak
                 @(string.IsNullOrEmpty(term) && string.IsNullOrEmpty(category) ? "." : " (yalnızca süzülen işlemler).")</p>
         </ChildContent>
         <Footer>
@@ -173,7 +191,7 @@ else
     private List<Row> rows = [];
     private string? term, category, error, copyName;
     private decimal? raise;
-    private bool copying, confirmRaise;
+    private bool copying, confirmRaise, showInactive;
     private NewProcedure? adding;
     private Toast? toast;
 
@@ -184,11 +202,14 @@ else
         public string Name { get; init; } = "";
         public string Category { get; init; } = "";
         public ProcedureKind Kind { get; init; }
+        public bool IsActive { get; init; } = true;
         public decimal? Price { get; set; }
     }
 
     private sealed class NewProcedure
     {
+        public int Id { get; init; }
+        public bool IsActive { get; set; } = true;
         public string? Code { get; set; }
         public string? Name { get; set; }
         public string? Category { get; set; }
@@ -213,8 +234,8 @@ else
         lists = await db.PriceLists.AsNoTracking().Include(l => l.Items).OrderByDescending(l => l.IsDefault).ThenBy(l => l.Name).ToListAsync();
         current = lists.FirstOrDefault(l => l.Id == (selectId ?? current?.Id)) ?? lists.FirstOrDefault();
         var prices = current?.Items.ToDictionary(i => i.ProcedureId, i => i.Price) ?? [];
-        rows = (await db.Procedures.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Category).ThenBy(p => p.Name).ToListAsync())
-            .Select(p => new Row { ProcedureId = p.Id, Code = p.Code, Name = p.Name, Category = p.Category, Kind = p.Kind, Price = prices.TryGetValue(p.Id, out var v) ? v : null })
+        rows = (await db.Procedures.AsNoTracking().Where(p => showInactive || p.IsActive).OrderBy(p => p.Category).ThenBy(p => p.Name).ToListAsync())
+            .Select(p => new Row { ProcedureId = p.Id, Code = p.Code, Name = p.Name, Category = p.Category, Kind = p.Kind, IsActive = p.IsActive, Price = prices.TryGetValue(p.Id, out var v) ? v : null })
             .ToList();
     }
 
@@ -255,7 +276,7 @@ else
     private async Task ApplyRaise()
     {
         if (current is null || raise is not { } pct) return;
-        var ids = Filtered.Where(r => r.Price is not null).Select(r => r.ProcedureId).ToList();
+        var ids = Filtered.Where(r => r.Price is not null && r.IsActive).Select(r => r.ProcedureId).ToList();
         await using var db = await DbFactory.CreateDbContextAsync();
         var items = await db.PriceListItems.Where(i => i.PriceListId == current.Id && ids.Contains(i.ProcedureId)).ToListAsync();
         foreach (var i in items)
@@ -279,12 +300,14 @@ else
     {
         if (current is null || string.IsNullOrWhiteSpace(copyName)) return;
         await using var db = await DbFactory.CreateDbContextAsync();
+        // Read the prices again: cells edited since the page loaded are saved in the database, not in current.Items.
+        var sourceItems = await db.PriceListItems.AsNoTracking().Where(i => i.PriceListId == current.Id).ToListAsync();
         var copy = new PriceList
         {
             Name = copyName.Trim(),
             Currency = current.Currency,
             VatRate = current.VatRate,
-            Items = current.Items.Select(i => new PriceListItem { ProcedureId = i.ProcedureId, BasePrice = i.BasePrice, VatAmount = i.VatAmount, Price = i.Price }).ToList(),
+            Items = sourceItems.Select(i => new PriceListItem { ProcedureId = i.ProcedureId, BasePrice = i.BasePrice, VatAmount = i.VatAmount, Price = i.Price }).ToList(),
         };
         db.PriceLists.Add(copy);
         await db.SaveChangesAsync();
@@ -301,7 +324,13 @@ else
         await Load(null);
     }
 
-    private async Task AddProcedure()
+    private void EditProcedure(Row r)
+    {
+        error = null;
+        adding = new NewProcedure { Id = r.ProcedureId, Code = r.Code, Name = r.Name, Category = r.Category, IsActive = r.IsActive };
+    }
+
+    private async Task SaveProcedure()
     {
         error = null;
         if (adding is null || string.IsNullOrWhiteSpace(adding.Name) || string.IsNullOrWhiteSpace(adding.Code))
@@ -311,22 +340,36 @@ else
         }
         await using var db = await DbFactory.CreateDbContextAsync();
         var code = adding.Code.Trim().ToUpperInvariant();
-        if (await db.Procedures.AnyAsync(p => p.Code == code))
+        if (await db.Procedures.AnyAsync(p => p.Code == code && p.Id != adding.Id))
         {
             error = "Bu kodla bir işlem zaten var.";
             return;
         }
-        var proc = new Procedure { Code = code, Name = adding.Name.Trim(), Category = string.IsNullOrWhiteSpace(adding.Category) ? "Genel" : adding.Category.Trim(), Kind = ProcedureKind.Treatment };
-        db.Procedures.Add(proc);
-        if (current is not null && adding.Price > 0)
+        var category = string.IsNullOrWhiteSpace(adding.Category) ? "Genel" : adding.Category.Trim();
+        Procedure proc;
+        if (adding.Id == 0)
         {
-            var item = new PriceListItem { PriceListId = current.Id, Procedure = proc };
-            Apply(item, adding.Price, current.VatRate);
-            db.PriceListItems.Add(item);
+            proc = new Procedure { Code = code, Name = adding.Name.Trim(), Category = category, Kind = ProcedureKind.Treatment };
+            db.Procedures.Add(proc);
+            if (current is not null && adding.Price > 0)
+            {
+                var item = new PriceListItem { PriceListId = current.Id, Procedure = proc };
+                Apply(item, adding.Price, current.VatRate);
+                db.PriceListItems.Add(item);
+            }
+        }
+        else
+        {
+            proc = await db.Procedures.FirstAsync(p => p.Id == adding.Id);
+            proc.Code = code;
+            proc.Name = adding.Name.Trim();
+            proc.Category = category;
+            proc.IsActive = adding.IsActive;
         }
         await db.SaveChangesAsync();
+        var isNew = adding.Id == 0;
         adding = null;
         await Load(current?.Id);
-        _ = toast?.Show($"{proc.Name} eklendi.");
+        _ = toast?.Show(isNew ? $"{proc.Name} eklendi." : proc.IsActive ? $"{proc.Name} güncellendi." : $"{proc.Name} listeden kaldırıldı.");
     }
 }

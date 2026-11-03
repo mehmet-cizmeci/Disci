@@ -115,21 +115,35 @@
         // cancels the stale ones through the token. A shared context throws on the second concurrent query.
         provider = async request =>
         {
-            await using var db = await DbFactory.CreateDbContextAsync(request.CancellationToken);
-            var query = BuildQuery(db);
-            var count = await query.CountAsync(request.CancellationToken);
-            if (count != total)
+            try
             {
-                total = count;
-                // The header sits outside the grid, which only re-renders itself.
-                _ = InvokeAsync(StateHasChanged);
+                return await LoadPage(request);
             }
-            var items = await request.ApplySorting(query)
-                .Skip(request.StartIndex)
-                .Take(request.Count ?? pagination.ItemsPerPage)
-                .ToListAsync(request.CancellationToken);
-            return GridItemsProviderResult.From(items, count);
+            // SqlClient reports a cancelled command as SqlException, not OperationCanceledException. QuickGrid only
+            // ignores the latter; anything else ends the circuit and the whole page stops responding.
+            catch (Exception) when (request.CancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(request.CancellationToken);
+            }
         };
+    }
+
+    private async Task<GridItemsProviderResult<Row>> LoadPage(GridItemsProviderRequest<Row> request)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(request.CancellationToken);
+        var query = BuildQuery(db);
+        var count = await query.CountAsync(request.CancellationToken);
+        if (count != total)
+        {
+            total = count;
+            // The header sits outside the grid, which only re-renders itself.
+            _ = InvokeAsync(StateHasChanged);
+        }
+        var items = await request.ApplySorting(query)
+            .Skip(request.StartIndex)
+            .Take(request.Count ?? pagination.ItemsPerPage)
+            .ToListAsync(request.CancellationToken);
+        return GridItemsProviderResult.From(items, count);
     }
 
     private IQueryable<Row> BuildQuery(DisciDbContext db)

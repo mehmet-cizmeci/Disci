@@ -142,6 +142,8 @@ a:hover { color: var(--c-primary-hover); }
 .page-head h1 { font-size: 1.5rem; margin: 0; }
 .page-head .sub { color: var(--c-muted); font-size: .9rem; margin-top: .15rem; }
 .page-head .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: .5rem; }
+/* Long forms: keep the title and the Save button in view below the top bar while scrolling. */
+.page-head.sticky { position: sticky; top: var(--top-h); z-index: 20; background: var(--c-bg); margin: -.75rem 0 .5rem; padding: .75rem 0; }
 
 /* ---------- Panels ---------- */
 .panel { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); box-shadow: var(--shadow); }

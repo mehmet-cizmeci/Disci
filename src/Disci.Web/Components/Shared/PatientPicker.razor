@@ -71,7 +71,8 @@ else
                 .ToListAsync(token);
             focus = 0;
         }
-        catch (OperationCanceledException) { }
+        // A newer keystroke cancelled this search; SqlClient reports that as SqlException, not OperationCanceledException.
+        catch (Exception) when (token.IsCancellationRequested) { }
     }
 
     private async Task OnKey(KeyboardEventArgs e)

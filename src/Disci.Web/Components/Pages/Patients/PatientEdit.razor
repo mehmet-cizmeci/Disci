@@ -4,10 +4,11 @@
 @inject IDbContextFactory<DisciDbContext> DbFactory
 @inject NavigationManager Nav
 @inject ClinicEvents Events
+@inject IJSRuntime JS
 
 <PageTitle>@(Id is null ? "Yeni hasta" : "Hasta düzenle") - Disci</PageTitle>
 
-<div class="page-head">
+<div class="page-head sticky">
     <div>
         <h1>@(Id is null ? "Yeni hasta" : $"{m.FirstName} {m.LastName}")</h1>
         <div class="sub">@(Id is null ? "Hasta kartını açın; zorunlu alanlar yalnızca ad ve soyad." : "Hasta bilgilerini düzenleyin")</div>
@@ -309,6 +310,22 @@
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private async Task Save()
+    {
+        try
+        {
+            await SaveCore();
+        }
+        catch (DbUpdateException)
+        {
+            // Without this the whole page would stop responding and the typed data would be lost.
+            error = "Kayıt veritabanına yazılamadı. Çok uzun bir alan olabilir; bilgileri kontrol edip tekrar deneyin.";
+        }
+        // The Save button stays in view while scrolling, the messages are at the top of the form.
+        if (error is not null || duplicates.Count > 0)
+            await JS.InvokeVoidAsync("scrollTo", 0, 0);
+    }
+
+    private async Task SaveCore()
     {
         error = null;
         if (string.IsNullOrWhiteSpace(m.FirstName) || string.IsNullOrWhiteSpace(m.LastName))

@@ -3,7 +3,7 @@
 Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kadar yapılanları, alınan kararları ve
 öğrenilen tuzakları anlatır. Bu projede çalışacak bir yapay zeka asistanı veya geliştirici önce bu dosyayı okumalı.
 
-- Son güncelleme: 2026-11-02
+- Son güncelleme: 2026-11-03
 - Hedefler ve istenen modüller: [Yapilacak.md](Yapilacak.md)
 - Kurulum ve komutlar: [README.md](README.md)
 - Son kullanıcı belgesi: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md)
@@ -147,10 +147,10 @@ Ayrıntılı sayılar ve tutarlar yalnızca yerel rapordadır: `data/reports/akt
   - `/` **Bugün**: resepsiyon panosu. Günün randevuları tek tıkla durum akışıyla (Randevulu → Teyitli → Geldi → Koltukta → Tamamlandı; ayrıca Gelmedi/İptal), bekleme salonu sayacı, borçlu hasta etiketi, yapılacaklar özeti
   - `/randevular`: gün (hekim sütunları) ve hafta görünümü, boş saate tıklayınca randevu, çakışma kontrolü (aynı hekim veya aynı hasta), kayıtsız (misafir) hasta, WhatsApp hatırlatma bağlantısı. Hekim rolü kendi sütunuyla açılır. `?hasta=ID` ile hasta seçili açılır
   - `/hastalar` (Aktif/Borçlu/Arşiv/Tümü süzgeci, kalan borç sütunu), `/hastalar/yeni`, `/hastalar/{id}/duzenle` (benzer kayıt uyarısı, anamnez uyarıları, tarife, sabit indirim)
-  - `/hastalar/{id}`: sağlık uyarıları (kırmızı), hesap özeti (toplam ücret / alınan / kalan + ilerleme çubuğu), sekmeler: Hesap (borç-ödeme ekstresi, yürüyen bakiye, makbuz, ödeme iptali), Tedaviler (FDI diş şeması, plan → "yapıldı say", plandan çıkar), Randevular, Bilgiler, Anamnez, Notlar (not ekleme), Fotoğraflar. Arşive kaldır/çıkar
+  - `/hastalar/{id}`: sağlık uyarıları (kırmızı), hesap özeti (toplam ücret / alınan / kalan + ilerleme çubuğu), sekmeler: Hesap (borç-ödeme ekstresi, yürüyen bakiye, makbuz, ödeme iptali), Tedaviler (FDI diş şeması, plan → "yapıldı say", plandan çıkar, yapılan tedavi/bulgu silme: ücretli kalemi yalnızca Admin/Hekim), Notlar (ekleme ve silme), Randevular, Bilgiler, Anamnez, Notlar (not ekleme), Fotoğraflar. Arşive kaldır/çıkar
   - `/bildirimler`: hesaplanan bildirimler (bekleyen, geciken, yarın teyit edilecek, bugün gelen borçlu, görevler, doğum günü, 6 ay kontrol/recall) + görev (Reminder) ekleme/tamamlama. Üst çubuktaki zil aynı listeden "acil" olanları sayar
   - `/kasa` (Admin, Hekim): tarih aralığı, tahsilat/tedavi/gider/net, ödeme şekline ve hekime göre dağılım, günlük döküm, en yüksek alacaklar
-  - `/fiyatlar` (Admin, Hekim): liste seçimi, hücrede fiyat düzenleme (KDV dahil girilir, net ve KDV payı listenin oranından), toplu % güncelleme (tam liraya yuvarlar), liste kopyalama, varsayılan liste, yeni işlem
+  - `/fiyatlar` (Admin, Hekim): işlem adı/kod/kategori düzenleme ve listeden kaldırma (pasif; "Kaldırılanları göster" ile geri alınır), liste seçimi, hücrede fiyat düzenleme (KDV dahil girilir, net ve KDV payı listenin oranından), toplu % güncelleme (tam liraya yuvarlar), liste kopyalama, varsayılan liste, yeni işlem
   - `/ayarlar` (Admin): hekimler (renk, mesai saatleri, etkin) ve randevu türleri (süre, renk)
   - Reçete (2026-11-02): hasta kartında "Reçete yaz" (`Shared/PrescriptionEditor.razor`), "Reçeteler" sekmesi (yazdır, aynısını yeniden yaz, düzenle; silme yalnızca Admin/Hekim), `/receteler` (yazılan reçeteler: tarih/hekim/arama süzgeci, "yazan" ve "hekim adına" etiketi; İlaç listesi sekmesinde katalog yönetimi), `/recete/{id}` yazdırma sayfası (A5, `?yazdir=1` yüklenince yazdırma penceresini açar)
   - `/makbuz/{odemeId}`: yazdırılabilir tahsilat makbuzu, tutar yazıyla. Başlık `Clinic:Name/Address/Phone` ayarlarından
@@ -205,11 +205,15 @@ tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesab�
 - Razor'da satır içi stile `double` yazarken Türkçe kültür ondalık virgül koyar (`top:12,5px` geçersiz CSS, öğe en üste kayar). `Calendar.razor`'daki `Px()` gibi değişmez kültürle biçimleyin.
 - Etkileşimli sayfada `NavigationManager.NavigateTo` önceden işleme (prerender) sırasında çağrılırsa yönlendirmeye dönüşür; `RendererInfo.IsInteractive` ile koruyun.
 - EF, kurucuyla oluşturulan (positional record) projeksiyonların alanlarına sonradan `Where`/`OrderBy` uygulayamaz; `Ledger.Balances` bu yüzden üye atamalı sınıf (`PatientBalance`) döndürüyor ve sorgularda `Charged - Paid` kullanılıyor.
-- `type="time"` girdisi `TimeOnly` bağlamada saniyeyi de gösterir; `@bind:format="HH:mm"` verin.
+- `type="time"` girdisine **`@bind:format` vermeyin**: Blazor betiği değeri saniyeyle gönderir (`11:15` → `11:15:00`), `HH:mm` biçimi bunu çözemez ve değişiklik sessizce atılır (2026-11-03: randevu saati ve hekim mesai saati bu yüzden değişmiyordu). Biçimsiz bağlamada `:00` ekranda zaten gizlenir. `MarkupRuleTests` bunu denetler.
 - Türkçe küçük harfe çevirme "NSAID"i "nsaıd" yapar (noktasız ı); metin karşılaştırmalarında ı ve i'yi eşitleyin (`PrescriptionSafety.Fold`).
 - CSS adlandırılmış sayfa (`@page rx { size: A5 }`) yalnızca öğeye verilirse, ardından gelen öğeler varsayılan boyutta ikinci bir sayfaya taşar; `body:has(.rx-sheet) { page: rx }` ile bütün belgeye verin.
 - Alt bileşen, üst bileşenden aldığı listeyi değiştirirse üst bileşen kendiliğinden yeniden çizilmez (ör. "Şablon olarak kaydet" düğmesi pasif kalıyordu); değişiklikten sonra bir `EventCallback` (`MedicationLines.OnChanged`) çağırın.
 - Tarayıcı otomasyon aracı yoksa ekran görüntüsü için: `BrowserTestServer`'ı çalıştırıp Chrome'u `--headless=new --remote-debugging-port` ile açan küçük bir Node (yerleşik WebSocket, CDP) betiği yeterli; `test-role` çerezi `Network.setCookie` ile verilir. Sunucuyu zorla kapatmak `Disci_Tests_*` veritabanını arkada bırakır, elle silin.
+- 2026-11-03: SqlClient, iptal edilen sorguyu `OperationCanceledException` değil `SqlException` ("Geçerli komutta önemli bir hata oluştu... İşlem kullanıcı tarafından iptal edildi") olarak fırlatır. Hasta listesinde hızlı yazınca QuickGrid önceki isteği iptal ediyor, bu hata yakalanmadığı için circuit ölüyor ve sayfadaki her şey (süzgeç, sıralama, düğmeler) çalışmaz oluyordu. İptal belirteciyle çalışan her sorguda `catch (Exception) when (token.IsCancellationRequested)` kullanın (QuickGrid için `OperationCanceledException(request.CancellationToken)` olarak yeniden fırlatın).
+- `disabled="@string.IsNullOrWhiteSpace(x)"` olan bir düğme, `x` varsayılan `@bind` (onchange) ile bağlıysa yazarken pasif kalır; ilk tıklama yalnızca alanı bulanıklaştırır ve boşa gider. Bu tür alanlara `@bind:event="oninput"` verin.
+- Uzun formlarda sayfa başlığındaki Kaydet düğmesi yapışkan üst çubuğun altına kayıyordu (oraya tıklayan "Hesabım"a gidip veriyi kaybediyordu); `.page-head.sticky` kullanın.
+- Tarayıcı testi: `BrowserTestServer` + başsız Chrome + küçük CDP betiği (Node yerleşik WebSocket). Tıklamayı `elementFromPoint` ile doğrulayın (örtülü düğmeyi yakalar); Bootstrap `scroll-behavior: smooth` yüzünden kaydırmada `behavior:'instant'` verin; başlıklar CSS ile büyük harfe çevrildiği için `innerText` yerine `textContent` ile eşleyin; sidebar'daki Çıkış da `button[type=submit]`'tir.
 
 ## Açık sorular (kullanıcıya sorulacak)
 
