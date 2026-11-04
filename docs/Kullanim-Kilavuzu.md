@@ -1,390 +1,399 @@
 # Disci kullanım kılavuzu
 
-Disci, kliniğimizin eski DentaLineSuit programının yerini alacak yeni hasta takip sistemidir. Bilgisayar,
-tablet veya telefondaki internet tarayıcısından (Chrome, Edge, Safari) kullanılır; ayrı bir program kurmak gerekmez.
+**Disci**, diş klinikleri için ücretsiz ve açık kaynak kodlu bir hasta takip programıdır. Randevu, hasta kartı, diş
+şeması, tedavi planı, ödeme ve makbuz, reçete, kasa raporu, fiyat listeleri ve kullanıcı yetkileri tek programdadır.
 
-Eski programdaki bütün hastalar, tedaviler, ödemeler, anamnezler, notlar ve fotoğraflar Disci'ye aktarılmıştır.
+Program klinikteki bir bilgisayarda (sunucu) sürekli çalışır. Siz onu **internet tarayıcısından** (Chrome, Edge,
+Firefox, Safari) kullanırsınız: aynı bilgisayardan, klinik ağındaki diğer bilgisayarlardan, tablet ve telefonlardan.
+Bilgileriniz internete çıkmaz; kliniğinizin bilgisayarında durur.
 
-> **Bu sürümde:** randevu takvimi, resepsiyon panosu (bekleme salonu), yeni hasta ekleme ve düzenleme, arşiv,
-> tedavi planı ve yapılan tedavi girişi, ödeme alma ve makbuz, reçete, bildirimler ve görevler, kasa raporu ve fiyat listeleri var.
-> Hasta kartından reçete yazılıp A5 kâğıda yazdırılabilir.
+> Bu kılavuzu programın içinden de okuyabilirsiniz: sol menünün altındaki **Kullanım kılavuzu** bağlantısı. Aynı
+> sayfadaki **PDF indir** düğmesiyle yazdırılabilir bir kopyasını alabilirsiniz.
 
----
+## Kısaca neler yapabilirsiniz
 
-## İçindekiler
+| Bölüm | Neler var |
+|---|---|
+| Bugün | Günün randevuları, tek tıkla "Geldi / Koltukta / Bitti", bekleme salonu, borçlu hasta uyarısı |
+| Randevular | Hekim sütunlu gün görünümü, hafta görünümü, çakışma kontrolü, WhatsApp hatırlatma |
+| Hastalar | Hızlı arama (ad, telefon, protokol no; Türkçe harf duyarsız), borçlu ve arşiv süzgeçleri |
+| Hasta kartı | Sağlık uyarıları, hesap özeti, ağız şeklinde diş şeması, tedavi planı, notlar, anamnez, fotoğraflar |
+| Tedavi ve ödeme | Plan → yapıldı, ödeme alma, makbuz yazdırma, ödeme iptali |
+| Reçete | İlaç listesi, şablonlar, alerji uyarısı, A5 yazdırma |
+| Bildirimler | Bekleyen, geciken, yarın teyit edilecek hastalar, görevler, doğum günleri, 6 ay kontrolü |
+| Kasa | Tarih aralığına göre tahsilat, tedavi, gider, ödeme şekli ve hekime göre dağılım |
+| Fiyat listeleri | Birden çok tarife, toplu yüzde güncelleme, KDV |
+| Yönetim | Klinik bilgileri, hekimler, randevu türleri, kullanıcılar ve roller |
+| Güvenlik | Kullanıcı rolleri, hatalı parolada kilit, passkey ve iki adımlı doğrulama, her gece otomatik yedek |
+| Eski program | DentaLine (DentaLineSuit ve DentaLine 2001) verilerini aktarma |
 
-1. [Programı açma](#1-programı-açma)
-2. [Giriş yapma](#2-giriş-yapma)
-3. [Ekran düzeni](#3-ekran-düzeni)
-4. [Ana sayfa (Bugün)](#4-ana-sayfa-bugün)
-5. [Hasta arama](#5-hasta-arama)
-6. [Hasta kartı](#6-hasta-kartı)
-7. [Randevular](#7-randevular)
-8. [Tedavi girme, ödeme alma, makbuz](#8-tedavi-girme-ödeme-alma-makbuz)
-9. [Reçete](#9-reçete)
-10. [Bildirimler ve görevler](#10-bildirimler-ve-görevler)
-11. [Kasa ve fiyat listeleri (yönetici, hekim)](#11-kasa-ve-fiyat-listeleri-yönetici-hekim)
-12. [Klinik ayarları (yalnızca yönetici)](#12-klinik-ayarları-yalnızca-yönetici)
-13. [Hesabım ve parola değiştirme](#13-hesabım-ve-parola-değiştirme)
-14. [Kullanıcı yönetimi (yalnızca yönetici)](#14-kullanıcı-yönetimi-yalnızca-yönetici)
-15. [Eski verilerle ilgili bilmeniz gerekenler](#15-eski-verilerle-ilgili-bilmeniz-gerekenler)
-16. [Sık sorulan sorular](#16-sık-sorulan-sorular)
-17. [Ek: Eski DentaLineSuit programı](#ek-eski-dentalinesuit-programı)
+## 1. İlk kurulum
 
----
+Programı kliniğin bilgisayarına kurmak için [Kurulum rehberi](https://github.com/mehmet-cizmeci/Disci/blob/main/docs/Kurulum-Rehberi.md)'ndeki adımları izleyin.
+Kurulum bitince tarayıcıda **ilk kurulum formu** açılır.
 
-## 1. Programı açma
+![İlk kurulum formu](kilavuz-resimler/01-kurulum.png)
 
-Disci, klinikteki ana bilgisayarda çalışır. O bilgisayarda program açıkken tarayıcıya şu adresi yazın:
+1. **Klinik bilgileri:** klinik adı, adresi, telefonu ve e-postası. Bunlar makbuz ve reçetelerin başında yazar.
+2. **Yönetici hesabı:** adınız soyadınız ve giriş adınız olacak e-posta adresiniz.
+3. **Hekim adı:** hekimseniz doldurun (ör. *Dt. Ayşe Yılmaz*). Randevu takviminde bu adla bir sütun açılır.
+4. **Parola:** en az 8 karakter; büyük harf, küçük harf ve rakam içermeli.
+5. **Kurulumu tamamla**'ya basın, ardından aynı e-posta ve parolayla giriş yapın.
+
+> Güvenlik için bu form **yalnızca programın kurulu olduğu bilgisayarda** açılır. Ağdaki başka bir bilgisayardan
+> açmaya çalışırsanız uyarı görürsünüz. Form bir kez doldurulduktan sonra bir daha açılmaz.
+
+Kurulumdan sonra sırasıyla şunları yapmanızı öneririz:
+
+1. **Klinik ayarları → Hekimler:** diğer hekimleri, çalışma saatlerini ve takvim renklerini ekleyin.
+2. **Klinik ayarları → Randevu türleri:** muayene, dolgu, kanal tedavisi gibi işlemleri süreleriyle ekleyin.
+3. **Fiyat listeleri:** fiyatları girin veya güncelleyin.
+4. **Kullanıcılar:** asistanlar ve hekimler için hesap açın.
+
+## 2. Programı açma
+
+**Programın kurulu olduğu bilgisayarda:** masaüstündeki **Disci** kısayoluna çift tıklayın. Program arka planda
+Windows hizmeti olarak sürekli çalıştığı için ayrıca başlatmanız gerekmez; bilgisayar açıldığında kendiliğinden başlar.
+
+**Klinik ağındaki diğer bilgisayarlarda:** kurulumu yapan kişinin verdiği **Disci-Baglanti** klasöründeki
+`Baglanti-Kur.bat` dosyasını bir kez çalıştırın. Masaüstüne **Disci** kısayolu gelir ve tarayıcı güvenlik uyarısı vermez.
+Elle girmek isterseniz tarayıcıya sunucu bilgisayarın adını veya IP adresini yazın:
 
 ```
-http://localhost:5111
+https://SUNUCU-ADI:5443
 ```
 
-Adresi tarayıcının yer imlerine (sık kullanılanlar) eklemenizi öneririz.
+**Tablet ve telefonda:** aynı Wi-Fi ağına bağlıyken tarayıcıya yukarıdaki adresi yazın ve ana ekrana ekleyin.
+İlk açılışta "bağlantı gizli değil" uyarısı çıkarsa bunun nedeni sertifikanın kliniğe özel olmasıdır; kurulum rehberindeki
+"Diğer cihazlar" bölümünde sertifikanın nasıl kurulacağı anlatılır.
 
-> Şimdilik Disci'ye yalnızca ana bilgisayardan girilebilir. Tablet ve telefonlardan erişim ağ ayarı yapıldıktan sonra açılacak.
+## 3. Giriş yapma
 
-## 2. Giriş yapma
+![Giriş ekranı](kilavuz-resimler/02-giris.png)
 
-1. **E-posta** kutusuna size verilen giriş adını yazın (örneğin `asistan@klinik.ornek`).
+1. **E-posta** kutusuna giriş adınızı yazın.
 2. **Parola** kutusuna parolanızı yazın.
-3. Kendi bilgisayarınızdaysanız **Beni hatırla** kutusunu işaretleyebilirsiniz; ortak kullanılan bir bilgisayarda işaretlemeyin.
-4. **Giriş yap** düğmesine basın.
+3. Kendi bilgisayarınızdaysanız **Beni hatırla**'yı işaretleyebilirsiniz; ortak bilgisayarlarda işaretlemeyin.
+4. **Giriş yap**'a basın.
 
-**Önemli kurallar**
-
-- Hesapları yalnızca klinik yöneticisi açar. Kendi kendinize hesap açamazsınız.
-- Parolayı **5 kez yanlış** girerseniz hesabınız bir süre kilitlenir. Biraz bekleyip tekrar deneyin veya yöneticiye başvurun.
-- Parolanızı unuttuysanız yöneticiye söyleyin; size yeni bir parola verir.
+- Hesapları yalnızca **yönetici** açar; kendi kendinize hesap açamazsınız.
+- Parolayı **5 kez yanlış** girerseniz hesap bir süre kilitlenir. Biraz bekleyin veya yöneticiye başvurun.
+- Parolanızı unuttuysanız yönetici size yeni parola verir (bkz. [Kullanıcılar](#14-kullanıcılar-yalnızca-yönetici)).
 - İşiniz bitince, özellikle ortak bilgisayarlarda, menüden **Çıkış** yapın.
 
-**Passkey ile giriş:** Parmak izi, yüz tanıma veya Windows PIN'i ile parolasız giriş yapmak istiyorsanız önce
-[Hesabım](#13-hesabım-ve-parola-değiştirme) sayfasından passkey ekleyin. Sonra giriş ekranında **Passkey ile giriş yap**'a basın.
+**Passkey ile giriş:** parmak izi, yüz tanıma veya Windows PIN'i ile parolasız giriş için önce **Hesabım** sayfasından
+passkey ekleyin; sonra giriş ekranında **Passkey ile giriş yap**'a basın.
 
-## 3. Ekran düzeni
+## 4. Ekran düzeni
 
-- **Sol menü:** Bugün, Randevular, Hastalar, Reçeteler, Bildirimler ve görevler; yönetici ve hekimlerde ayrıca Kasa ve tahsilat,
-  Fiyat listeleri; yöneticide Klinik ayarları ve Kullanıcılar. En altta Hesabım ve Çıkış.
-- **Üst çubuk:** her sayfadan hasta arama kutusu, **Randevu** düğmesi, **zil** (bekleyen işlerin sayısı) ve hesabınız.
-- **Telefon ve tablette** menü gizlenir; sol üstteki **☰** düğmesine basarak açılır.
-- Ekranlar kendiliğinden güncellenir: resepsiyonda hasta "Geldi" yapılınca hekimin ekranında da hemen görünür.
+- **Sol menü:** Bugün, Randevular, Hastalar, Reçeteler, Bildirimler ve görevler. Yönetici ve hekimlerde ayrıca
+  *Kasa ve tahsilat* ile *Fiyat listeleri*; yöneticide *Klinik ayarları* ve *Kullanıcılar*. En altta *Kullanım kılavuzu*,
+  *Hesabım* ve *Çıkış*.
+- **Üst çubuk:** her sayfadan hasta arama kutusu, **Randevu** düğmesi, **zil** (ilgilenilmesi gereken işlerin sayısı) ve hesabınız.
+- **Telefon ve tablette** menü gizlenir; sol üstteki **☰** düğmesiyle açılır.
+- **Ekranlar kendiliğinden güncellenir:** resepsiyonda bir hasta "Geldi" yapılınca hekimin ekranında da hemen görünür.
 
-Ekranda "Beklenmeyen bir hata oluştu" yazan sarı bir şerit çıkarsa **Yenile**'ye basın. Sorun sürerse yöneticiye haber verin.
+Ekranın altında "Beklenmeyen bir hata oluştu" yazan bir şerit çıkarsa **Yenile**'ye basın. Sorun sürerse
+[Sorun giderme](#18-sorun-giderme) bölümüne bakın.
 
-## 4. Ana sayfa (Bugün)
+## 5. Bugün (ana sayfa)
 
-Giriş yaptığınızda ilk bu ekran açılır; resepsiyonun günlük çalışma ekranıdır.
+![Bugün ekranı](kilavuz-resimler/03-bugun.png)
 
-- **Özet kartları:** bugünkü randevu sayısı, bekleme salonundaki hasta sayısı, bugünkü tahsilat; yönetici ve hekimde
-  toplam alacak, asistanda kayıtlı hasta sayısı.
+Giriş yapınca ilk bu ekran açılır; resepsiyonun günlük çalışma ekranıdır.
+
+- **Özet kartları:** bugünkü randevu sayısı, bekleme salonundaki hasta, bugünkü tahsilat; yönetici ve hekimde toplam alacak.
 - **Bugünün randevuları:** saat sırasıyla. Satırdaki düğme hastayı bir sonraki adıma taşır:
-  **Teyit et → Geldi → Koltuğa al → Bitir**. Gelmeyen hasta için **✕ (Gelmedi)**. Borcu olan hastanın adının yanında kırmızı
-  tutar etiketi çıkar; hasta gelince tahsilatı hatırlatmak içindir.
+  **Teyit et → Geldi → Koltuğa al → Bitir**. Gelmeyen hasta için **✕ (Gelmedi)**.
+  Borcu olan hastanın adının yanında kırmızı tutar etiketi çıkar; hasta gelince tahsilatı hatırlatmak içindir.
 - **Bekleme salonu ve koltuk:** gelen hastalar ve kaç dakikadır beklediği.
-- **Yapılacaklar:** bildirimlerin özeti (bkz. [bölüm 10](#10-bildirimler-ve-görevler)).
+- **Yapılacaklar:** bildirimlerin özeti (bkz. [Bildirimler](#10-bildirimler-ve-görevler)).
 
-## 5. Hasta arama
+## 6. Hastalar ve arama
 
-Menüden **Hastalar**'a girin.
+![Hasta listesi](kilavuz-resimler/04-hastalar.png)
 
-- Arama kutusuna yazmaya başladığınız anda liste süzülür; düğmeye basmanız gerekmez.
-- Neye göre arayabilirsiniz:
-  - **Ad veya soyad:** `deneme` ya da `hastaoğlu`. İki kelime yazarsanız (`deneme hastaoğlu`) ikisini de içeren hastalar çıkar.
-  - **Telefon:** En az 4 rakam yazın (`5321`). Boşluklu yazılmış numaralar da bulunur.
-  - **Protokol numarası:** Eski programdaki hasta numarası (`1234`).
-- Sütun başlıklarına (**Hasta**, **Yaş**, **Son tedavi**, **Kalan**) tıklayarak listeyi sıralayabilirsiniz.
-- Liste sayfa sayfa gösterilir (sayfada 25 hasta); en alttaki düğmelerle sayfalar arasında gezin.
-- Üstteki süzgeçler: **Aktif**, **Borçlu** (en çok borcu olan en üstte), **Arşiv** (bkz. [bölüm 15](#15-eski-verilerle-ilgili-bilmeniz-gerekenler)), **Tümü**.
-- **Yeni hasta** düğmesiyle kayıt açılır. Yalnızca ad ve soyad zorunludur. Aynı TC kimlik numarası ya da aynı ad-soyad veya
-  cep telefonuyla kayıtlı biri varsa program uyarır; aynı kişiyse yeni kayıt açmayın.
+Menüden **Hastalar**'a girin veya üst çubuktaki arama kutusunu kullanın.
 
-Hastanın adına tıklayınca hasta kartı açılır.
+- Yazmaya başladığınız anda liste süzülür.
+- **Ad veya soyad:** Türkçe harfle de harfsiz de yazabilirsiniz; *yılmaz*, *YILMAZ* ve *yilmaz* aynı sonucu verir.
+  İki kelime yazarsanız (*ayşe yılmaz*) ikisini de içeren hastalar çıkar.
+- **Telefon:** başında 0 olan ya da 7 haneden uzun sayılar telefon sayılır (*0532 111*). Boşluklu yazılmış numaralar da bulunur.
+- **Protokol numarası:** 0 ile başlamayan en fazla 6 haneli sayı (*1234*). Eski programdan gelen hastaların eski numaraları
+  korunur; DentaLine 2001'den gelen hastalarda o programdaki numara da aranabilir ("#123 · DL2001 #45").
+- Sütun başlıklarına tıklayarak sıralayabilirsiniz. Süzgeçler: **Aktif**, **Borçlu** (en çok borcu olan üstte), **Arşiv**, **Tümü**.
 
-## 6. Hasta kartı
+**Yeni hasta:** **Yeni hasta** düğmesi. Yalnızca ad ve soyad zorunludur. Aynı TC kimlik numarası, aynı ad-soyad veya
+aynı cep telefonuyla kayıtlı biri varsa program uyarır; aynı kişiyse yeni kayıt açmayın. Formda iletişim bilgileri,
+adres, yakınlar, sağlık bilgileri (anamnez), tarife ve sabit indirim girilir.
 
-Kartın üstünde hastanın adı, protokol numarası, yaşı, telefonu, hekimi ve sonraki randevusu görünür. Telefondan
-bakıyorsanız numaraya dokunarak doğrudan arayabilirsiniz.
+## 7. Hasta kartı
 
-- **Kırmızı etiketler** (Dikkat, Alerji, Diyabet…) hastanın sağlık uyarılarıdır. Tedaviden önce mutlaka bakın.
-- **Düğmeler:** Randevu ver, Ödeme al, Tedavi ekle, Reçete yaz, Düzenle, WhatsApp (mesaj penceresini açar), Arşive kaldır.
-- **Arşive kaldır:** hasta aktif listeden ve randevu aramasından kalkar; tedavi ve ödemeleri silinmez. Geri almak için
-  hastayı Hastalar → Arşiv süzgecinde bulup **Arşivden çıkar**'a basın.
+![Hasta kartı](kilavuz-resimler/05-hasta-karti.png)
+
+Kartın üstünde hastanın adı, protokol numarası, yaşı, telefonu, hekimi ve sonraki randevusu görünür.
+Telefondan bakıyorsanız numaraya dokunarak arayabilirsiniz.
+
+- **Kırmızı etiketler** (Alerji, Diyabet, Kalp hastalığı…) hastanın sağlık uyarılarıdır. Tedaviden önce mutlaka bakın.
+- **Düğmeler:** Randevu ver, Ödeme al, Tedavi ekle, Reçete yaz, Düzenle, WhatsApp, Arşive kaldır.
+- **Arşive kaldır:** hasta aktif listeden ve randevu aramasından kalkar; kayıtları silinmez. Geri almak için
+  Hastalar → **Arşiv** süzgecinde bulup **Arşivden çıkar**'a basın.
 
 ### Hesap özeti
 
 | Alan | Anlamı |
 |---|---|
-| Toplam ücret | "Yapıldı" durumundaki tedavilerin toplam tutarı |
+| Toplam ücret | "Yapıldı" durumundaki tedavilerin toplamı |
 | Alınan | İptal edilmemiş ödemelerin toplamı |
 | Kalan borç | Toplam ücret eksi alınan. Eksi çıkarsa "Fazla ödeme" yazar |
-| Bekleyen plan | Planlanmış ama henüz yapılmamış tedavilerin tutarı (borca eklenmez) |
+| Bekleyen plan | Planlanmış ama yapılmamış tedavilerin tutarı (borca eklenmez) |
 
-> Bakiye yalnızca Türk lirası kayıtlarla hesaplanır. Eski sistemde dolar ile girilmiş birkaç kayıt listede görünür ama bakiyeye katılmaz.
+> Bakiye Türk lirası kayıtlarla hesaplanır. Döviz ile girilmiş kayıtlar listede görünür ama bakiyeye katılmaz.
 
 ### Sekmeler
 
-**Hesap**: Borç (yapılan tedavi) ve ödeme hareketleri tarih sırasıyla; her satırda o günkü bakiye. Ödeme satırındaki
-yazıcı düğmesi makbuzu açar.
+- **Hesap:** borç (yapılan tedavi) ve ödeme hareketleri tarih sırasıyla; her satırda o günkü bakiye. Ödeme satırındaki
+  yazıcı düğmesi makbuzu açar.
+- **Tedaviler:** ağız şeklindeki diş şeması ve altında tedavi planı ile yapılan tedaviler (bkz. [bölüm 8](#8-tedavi-ödeme-ve-makbuz)).
+- **Randevular:** hastanın geçmiş ve gelecek randevuları.
+- **Reçeteler:** yazılan reçeteler; yazdır, aynısını yeniden yaz, düzenle.
+- **Bilgiler:** kimlik, iletişim, adres, kayıt tarihi, tarife, hekimi, referansı ve yakınları.
+  *Hekimi* "Ortak havuz" ise hasta belirli bir hekime atanmamıştır.
+- **Anamnez:** tıbbi geçmiş; "evet" işaretlenmiş durumlar etiket olarak görünür. Alerji ayrıntıları ve notlar alttadır.
+- **Notlar:** hastaya ait genel notlar ve dişe özel notlar; üstteki kutudan yeni not eklenir.
+- **Fotoğraflar:** ağız içi ve yüz fotoğrafları; büyütmek için fotoğrafa tıklayın.
 
-**Tedaviler**: Üstte diş şeması (yeşil: yapıldı, mavi: planlı, gri: bulgu; dişin üstüne gelince ayrıntı çıkar),
-altında tedavi planı ve yapılan tedaviler.
+## 8. Tedavi, ödeme ve makbuz
 
-| Durum | Anlamı |
-|---|---|
-| **Yapıldı** (yeşil) | Tamamlanmış ve ücretlendirilmiş tedavi |
-| **Plan** (mavi) | Planlanmış, henüz yapılmamış tedavi |
-| **Bulgu** (gri) | Muayenede tespit edilen durum (kayıp diş, implant, çene kırığı vb.); ücreti yoktur |
+![Tedaviler sekmesi ve diş şeması](kilavuz-resimler/06-tedaviler.png)
 
-Diş numaraları uluslararası sisteme göredir:
+### Diş şeması
+
+Dişler gerçek ağız kavsi şeklinde ve gerçek boyutlarına oranlı çizilir; hastanın sağı ekranın solundadır. Süt dişleri
+iç kavistedir. Renkler: **yeşil** yapıldı, **mavi** planlı, **gri** bulgu. Dişin üstüne gelince ayrıntı çıkar.
+
+Diş numaraları uluslararası (FDI) sisteme göredir:
 
 | | Sağ üst | Sol üst | Sol alt | Sağ alt |
 |---|---|---|---|---|
 | Kalıcı dişler | 11–18 | 21–28 | 31–38 | 41–48 |
 | Süt dişleri | 51–55 | 61–65 | 71–75 | 81–85 |
 
-**Randevular**: Hastanın geçmiş ve gelecek randevuları, durumlarıyla.
+### Tedavi eklemek
 
-**Bilgiler**: Kimlik ve iletişim bilgileri, adresler, kayıt tarihi, tarife, hekimi, referansı, yakınları ve hasta notu.
-- *Tarife*: Hastanın bağlı olduğu fiyat listesi (Güncel tarife veya Eski tarife).
-- *Hekimi*: "Ortak havuz" yazıyorsa hasta belirli bir hekime atanmamıştır; bütün hekimler görebilir.
+Hasta kartında **Tedavi ekle**:
 
-**Anamnez**: Hastanın tıbbi geçmişi. Sarı etiketler hastada "evet" işaretlenmiş durumlardır (örneğin Diyabet,
-Hipertansiyon, İlaç alerjisi). Etiketler gruplara ayrılmıştır: Tıbbi geçmiş, Kullandığı ilaçlar, Alışkanlıklar, Alerji ve ortodonti muayene bulguları.
-Alerji ayrıntıları ve notlar alttadır.
+1. Kayıt türünü seçin: **Plan** (yapılacak), **Yapıldı** (bugün yapıldı, borca eklenir) veya **Bulgu** (ücretsiz tespit:
+   kayıp diş, implant mevcut vb.).
+2. Diş şemasından dişleri seçin; birden çok seçilebilir. Hiç seçmezseniz tüm ağız sayılır.
+3. İşlemi adıyla arayın. Ücret hastanın fiyat listesinden gelir; hastanın sabit indirimi varsa uygulanır. Ücreti değiştirebilirsiniz.
+4. **Ekle**'ye basın; başka işlem de ekleyebilirsiniz. Sonra **Kaydet**. Ücret diş başınadır.
 
-> Tedaviye başlamadan önce Anamnez sekmesini kontrol etmeyi alışkanlık edinin.
+**Planı tamamlamak:** Tedaviler sekmesinde plandaki satırları işaretleyip **… işlemi yapıldı say**'a basın. Seçilenler
+bugünün tarihiyle "Yapıldı" olur ve borca eklenir. **Plandan çıkar** plandaki kalemi siler. Ücretli bir kaydı yalnızca
+yönetici ve hekim silebilir.
 
-**Notlar**: Hastaya ait genel notlar ve dişe özel notlar. Üstteki kutudan yeni not eklenir.
+### Ödeme almak
 
-**Fotoğraflar**: Ağız içi kamera ve yüz fotoğrafları; tarih, tür ve varsa diş numarasıyla. Büyük görmek için fotoğrafa tıklayın; yeni sekmede açılır.
-
-> Röntgen görüntüleri eski programda bu bilgisayarda kayıtlı değildi; bu yüzden Disci'de de yok.
-
-## 7. Randevular
-
-Menüden **Randevular**'a girin.
-
-- **Gün** görünümünde her hekim bir sütundur; **Hafta** görünümünde her gün bir sütun. Hekim kutusundan tek hekime süzebilirsiniz.
-  Hekim hesabıyla girildiğinde takvim hekimin kendi sütunuyla açılır.
-- **Randevu vermek:** takvimde boş bir saate tıklayın (ya da **Yeni randevu**). Hastayı adı veya telefonuyla arayıp seçin;
-  kayıtlı olmayan biri için **Kayıtsız hasta**'yı açıp ad ve telefon yazın. İşlem türü seçilince süre kendiliğinden gelir.
-- Seçilen saatte hekimin ya da hastanın başka randevusu varsa program **"Bu saat dolu"** der ve kaydetmez.
-- **Randevuyu açmak:** üstüne tıklayın. Saat, hekim, not ve **durum** değiştirilebilir. **Hatırlat** düğmesi hastaya hazır bir
-  WhatsApp hatırlatma mesajı açar; mesajı siz gönderirsiniz.
-- Renkler randevunun durumunu gösterir: gri randevulu, mavi teyitli, turuncu geldi/bekliyor, mor koltukta, yeşil tamamlandı,
-  kırmızı gelmedi. Kırmızı yatay çizgi şu anki saattir.
-
-## 8. Tedavi girme, ödeme alma, makbuz
-
-**Tedavi eklemek** (hasta kartında **Tedavi ekle**):
-
-1. Kayıt türünü seçin: **Plan** (yapılacak), **Yapıldı** (bugün yapıldı, borca eklenir) veya **Bulgu** (ücretsiz tespit).
-2. Diş şemasından dişleri seçin (birden çok olabilir; hiç seçmezseniz tüm ağız sayılır).
-3. İşlemi adıyla arayın; ücret hastanın fiyat listesinden gelir, hastanın sabit indirimi varsa uygulanır. Ücreti değiştirebilirsiniz.
-4. **Ekle**'ye basın; başka işlem de ekleyebilirsiniz. Sonra kaydedin. Ücret diş başınadır.
-
-**Planı tamamlamak:** Tedaviler sekmesinde plandaki satırları işaretleyip **… işlemi yapıldı say**'a basın. Seçilenler bugünün
-tarihiyle "Yapıldı" olur ve hastanın borcuna eklenir. **Plandan çıkar** plandaki kalemi siler.
-
-**Ödeme almak** (**Ödeme al**): tutar kendiliğinden kalan borç olarak gelir; değiştirebilirsiniz. Ödeme şeklini seçin
+**Ödeme al** düğmesi. Tutar kendiliğinden kalan borç olarak gelir; değiştirebilirsiniz. Ödeme şeklini seçin
 (Nakit, Kredi kartı, Havale/EFT, Çek/Senet), gerekirse açıklama ("implant 1. taksit") ve makbuz no yazın.
 
-**Makbuz:** Hesap sekmesinde ödemenin yanındaki yazıcı düğmesi. Açılan sayfada **Yazdır**'a basın. Tutar yazıyla da yazılır.
+![Ödeme alma penceresi](kilavuz-resimler/07-odeme.png)
+
+**Makbuz:** Hesap sekmesinde ödemenin yanındaki yazıcı düğmesi. Açılan sayfada **Yazdır**'a basın; tutar yazıyla da yazılır.
+Makbuzun başındaki klinik bilgileri **Klinik ayarları**'ndan gelir.
 
 **Ödeme iptali** (yalnızca yönetici ve hekim): ödemenin yanındaki ✕. Kayıt silinmez, üstü çizili kalır ve bakiyeye katılmaz.
 
-## 9. Reçete
+## 9. Randevular
 
-**Reçete yazmak** (hasta kartında **Reçete yaz**):
+![Randevu takvimi](kilavuz-resimler/08-randevular.png)
 
-1. Pencerenin üstünde hastanın **ilaç alerjisi** (kırmızı) ve sağlık durumları (sarı) görünür; önce bunlara bakın.
-2. **Hekim:** reçete her zaman bir hekim adına düzenlenir. Asistanlar hekim adına yazabilir; reçeteyi kimin yazdığı ayrıca saklanır.
-3. **Tanı** yazın (listeden seçebilir ya da kendiniz yazabilirsiniz). Hazır bir şablon varsa **Şablondan ekle** altındaki
-   düğmeye basın (örneğin *Çekim sonrası*): ilaçlar ve tanı tek tıkla gelir, sonra istediğinizi değiştirebilirsiniz.
-   Hastanın alerjisiyle eşleşen ilaç içeren şablonlar **kırmızı** ve ⚠ işaretli görünür.
-4. **İlaç ekle** kutusuna ilacın adını yazın ve listeden seçin; doz ve kullanım kendiliğinden gelir, değiştirebilirsiniz.
-   Listede olmayan bir ilaç için **Enter**'a basın; "Bu ilacı ilaç listesine de ekle" işaretlenirse sonraki sefer listede çıkar.
-5. Her ilaç için kutu sayısını girin, gerekirse hastaya not yazın.
-6. **Kaydet ve yazdır**'a basın; reçete sayfası açılır ve yazdırma penceresi gelir. Reçete A5 kâğıda göre hazırlanır.
+Menüden **Randevular**'a girin.
 
-> İlaç adı hastanın alerjisiyle eşleşirse (örneğin penisilin alerjisi olan hastaya Augmentin veya amoksisilin) satır kırmızı
-> çerçevelenir ve **"Hastanın alerjisiyle eşleşiyor"** uyarısı çıkar. Program reçeteyi engellemez; hekimle mutlaka teyit edin.
-> Bu uyarı yardımcıdır, bütün ilaç etkileşimlerini bilmez.
-
-**Reçete şablonları:** Sık yazdığınız reçeteleri şablon olarak saklayın. Yöneticiler ve hekimler bir reçeteyi yazarken
-pencerenin altındaki **Şablon olarak kaydet**'e basıp ad vererek ya da **Reçeteler → Şablonlar** sekmesinden **Şablon ekle** ile
-şablon oluşturur; aynı yerden düzenler, sırasını değiştirir (◀ ▶), pasif yapar veya siler. Asistanlar şablonları kullanabilir ama
-değiştiremez. Şablon listesi boşken **Örnek şablonları ekle** düğmesi birkaç örnek (çekim sonrası, cerrahi sonrası, apse,
-penisilin alerjisinde enfeksiyon, aft) ekler; örnekleri kullanmadan önce hekim olarak kontrol edip kliniğinize göre düzenleyin.
-
-**Reçeteler sekmesi** (hasta kartı): yazılan reçeteler; **yazdır**, **aynısını yeniden yaz** (aynı ilaçlarla yeni reçete açar),
-**düzenle**. Silme yalnızca yönetici ve hekimdedir.
-
-**Reçeteler sayfası** (menü): **Yazılan reçeteler**, **Şablonlar** ve **İlaç listesi** sekmeleri. Yazılan reçeteler bütün hastalara yazılanlardır; tarih, hekim ve hasta/ilaç adıyla süzülür. "Yazan" sütununda
-asistanın hekim adına yazdığı reçeteler **hekim adına** etiketiyle görünür. **İlaç listesi** sekmesinden ilaç eklenir, doz ve
-varsayılan kullanımı düzenlenir; artık kullanılmayan ilaç **pasif** yapılır (eski reçetelerde görünmeye devam eder).
-
-> E-Reçete (Medula) bağlantısı yoktur; bu ekran kâğıt reçete içindir.
+- **Gün** görünümünde her hekim bir sütundur; **Hafta** görünümünde her gün bir sütun. Hekim kutusundan tek hekime
+  süzebilirsiniz. Hekim hesabıyla girilince takvim hekimin kendi sütunuyla açılır.
+- **Randevu vermek:** takvimde boş bir saate tıklayın (ya da **Yeni randevu**). Hastayı adı, telefonu veya protokol
+  numarasıyla arayıp seçin. Kayıtlı olmayan biri için **Kayıtsız hasta**'yı açıp ad ve telefon yazın. İşlem türü
+  seçilince süre kendiliğinden gelir.
+- Seçilen saatte hekimin ya da hastanın başka randevusu varsa program **"Bu saat dolu"** der ve kaydetmez.
+- **Randevuyu açmak:** üstüne tıklayın. Saat, hekim, not ve **durum** değiştirilebilir. **Hatırlat** düğmesi hastaya
+  hazır bir WhatsApp hatırlatma mesajı açar; mesajı siz gönderirsiniz.
+- Renkler: gri randevulu, mavi teyitli, turuncu geldi/bekliyor, mor koltukta, yeşil tamamlandı, kırmızı gelmedi.
+  Kırmızı yatay çizgi şu anki saattir.
 
 ## 10. Bildirimler ve görevler
 
-Üst çubuktaki **zil**, şu an ilgilenilmesi gereken işlerin sayısını gösterir. Tamamı **Bildirimler ve görevler** sayfasındadır:
+![Bildirimler](kilavuz-resimler/09-bildirimler.png)
+
+Üst çubuktaki **zil**, şu an ilgilenilmesi gereken işlerin sayısını gösterir. Tamamı **Bildirimler ve görevler** sayfasındadır.
 
 | Bölüm | Ne yapılır |
 |---|---|
 | Bekleme salonu | 15 dakikadan uzun bekleyen kırmızı görünür; **Koltuğa al** |
 | Gecikenler | Randevu saati 10 dakikadan fazla geçmiş ama gelmemiş: arayın, **Geldi** veya **Gelmedi** |
-| Yarın teyit edilecek randevular | Telefonla ya da WhatsApp düğmesiyle ulaşıp **Teyit et** veya **İptal** |
+| Yarın teyit edilecekler | Telefonla ya da WhatsApp ile ulaşıp **Teyit et** veya **İptal** |
 | Bugün gelen borçlu hastalar | Gelince tahsilatı hatırlayın |
 | Görevler | Bugün veya geçmiş tarihli görevler; bitince **Tamamlandı** |
 | Doğum günleri | İsterseniz kutlama mesajı gönderin |
-| Kontrol zamanı gelenler | Son tedavisinin üzerinden 6 ay geçmiş ve randevusu olmayan hastalar; **Randevu ver** |
+| Kontrol zamanı gelenler | Son tedavisinden 6 ay geçmiş, randevusu olmayan hastalar; **Randevu ver** |
 
-**Görev eklemek:** **Görev ekle** → görevi yazın ("laboratuvardan kron gelince hastayı ara"), tarihini, kimin için olduğunu
-(Herkes / Asistan / Hekim) ve isterseniz hastayı seçin.
+**Görev eklemek:** **Görev ekle** → görevi yazın ("laboratuvardan kron gelince hastayı ara"), tarihini, kimin için
+olduğunu (Herkes / Asistan / Hekim) ve isterseniz hastayı seçin.
 
-## 11. Kasa ve fiyat listeleri (yönetici, hekim)
+## 11. Reçete
+
+![Reçete yazma](kilavuz-resimler/10-recete.png)
+
+Hasta kartında **Reçete yaz**:
+
+1. Pencerenin üstünde hastanın **ilaç alerjisi** (kırmızı) ve sağlık durumları görünür; önce bunlara bakın.
+2. **Hekim:** reçete her zaman bir hekim adına düzenlenir. Asistanlar hekim adına yazabilir; yazan kişi ayrıca saklanır.
+3. **Tanı** yazın. Hazır şablon varsa **Şablondan ekle** altındaki düğmeye basın (ör. *Çekim sonrası*); ilaçlar ve tanı
+   tek tıkla gelir. Hastanın alerjisiyle eşleşen ilaç içeren şablonlar **kırmızı** ve ⚠ işaretli görünür.
+4. **İlaç ekle** kutusuna ilacın adını yazın ve listeden seçin; doz ve kullanım kendiliğinden gelir. Listede olmayan ilaç
+   için **Enter**'a basın; "Bu ilacı ilaç listesine de ekle" işaretlenirse sonraki sefer listede çıkar.
+5. Her ilaç için kutu sayısını girin, gerekirse not yazın.
+6. **Kaydet ve yazdır**: reçete A5 kâğıda göre hazırlanır ve yazdırma penceresi açılır.
+
+> İlaç adı hastanın alerjisiyle eşleşirse (ör. penisilin alerjisi olan hastaya amoksisilin) satır kırmızı çerçevelenir
+> ve **"Hastanın alerjisiyle eşleşiyor"** uyarısı çıkar. Program reçeteyi engellemez; uyarı yardımcıdır, bütün ilaç
+> etkileşimlerini bilmez. Son karar hekimindir.
+
+**Reçeteler sayfası** (menü): *Yazılan reçeteler* (tarih, hekim, hasta/ilaç adıyla süzme), *Şablonlar* ve *İlaç listesi*
+sekmeleri. Şablonları yönetici ve hekimler düzenler, asistanlar kullanır. Şablon listesi boşken **Örnek şablonları ekle**
+birkaç örnek ekler; kullanmadan önce hekim olarak kontrol edip kliniğinize göre düzenleyin.
+
+> E-Reçete (Medula) bağlantısı yoktur; bu ekran kâğıt reçete içindir.
+
+## 12. Kasa ve fiyat listeleri (yönetici, hekim)
+
+![Kasa raporu](kilavuz-resimler/11-kasa.png)
 
 **Kasa ve tahsilat:** Bugün, Dün, Bu hafta, Bu ay, Geçen ay, Bu yıl ya da istediğiniz tarih aralığı için tahsilat, yapılan
-tedavi, gider ve net tutar; ödeme şekline ve hekime göre dağılım, günlük döküm ve en yüksek alacaklar. **Yazdır** ile çıktısı alınır.
+tedavi, gider ve net tutar; ödeme şekline ve hekime göre dağılım, günlük döküm ve en yüksek alacaklar. **Yazdır** ile çıktı alınır.
 
 **Fiyat listeleri:**
 
 - Soldan listeyi seçin. Fiyatı hücreye yazıp hücreden çıkınca kaydedilir (KDV dahil fiyat). Hücreyi boşaltmak fiyatı kaldırır.
-- **Toplu güncelle:** yüzde yazın (örneğin `15`; indirim için `-10`) ve onaylayın. Arama veya kategori süzgeci açıksa
-  yalnızca listelenen işlemler değişir. Fiyatlar tam liraya yuvarlanır.
-- **Listeyi kopyala:** kuruma veya kampanyaya özel yeni bir tarife açar. **Varsayılan yap:** tarifesi seçilmemiş hastalarda kullanılan liste.
-- **Yeni işlem:** listede olmayan bir tedaviyi kod, ad ve kategoriyle ekler.
-- Hastaya özel tarife ve sabit indirim, hasta kartında **Düzenle** → *Klinik ve ücret* bölümünden seçilir.
+- **Toplu güncelle:** yüzde yazın (ör. `15`; indirim için `-10`). Arama veya kategori süzgeci açıksa yalnızca listelenenler
+  değişir. Fiyatlar tam liraya yuvarlanır.
+- **Listeyi kopyala:** kuruma veya kampanyaya özel yeni tarife açar. **Varsayılan yap:** tarifesi seçilmemiş hastalarda kullanılır.
+- **Yeni işlem:** listede olmayan bir tedaviyi kod, ad ve kategoriyle ekler. İşlem adını düzenleyebilir veya listeden
+  kaldırabilirsiniz (kaldırılanlar "Kaldırılanları göster" ile geri alınır).
+- Hastaya özel tarife ve sabit indirim hasta kartında **Düzenle**'den seçilir.
 
-## 12. Klinik ayarları (yalnızca yönetici)
+## 13. Klinik ayarları (yalnızca yönetici)
 
-- **Hekimler:** ad, uzmanlık, takvim rengi, mesai başlangıç ve bitişi (takvimin gösterdiği saatler buna göre ayarlanır),
-  etkin/pasif. Pasif hekim takvimde görünmez.
+![Klinik ayarları](kilavuz-resimler/12-ayarlar.png)
+
+- **Klinik bilgileri:** klinik adı, adres, telefon, e-posta, vergi dairesi ve numarası. Makbuz ve reçetelerin başında yazar.
+  Değiştirip **Klinik bilgilerini kaydet**'e basın.
+- **Hekimler:** ad, uzmanlık, takvim rengi, mesai başlangıç ve bitişi (takvimin saatleri buna göre ayarlanır), etkin/pasif.
+  Pasif hekim takvimde görünmez, eski kayıtlarda adı kalır.
 - **Randevu türleri:** ad, süre ve renk (Muayene 20 dk, Dolgu 45 dk, Kanal tedavisi 60 dk gibi).
-- Makbuzdaki klinik adı, adresi ve telefonu şimdilik program ayar dosyasından (`appsettings.json` → `Clinic`) değiştirilir.
 
-## 13. Hesabım ve parola değiştirme
+## 14. Kullanıcılar (yalnızca yönetici)
 
-Menüden **Hesabım**'a girin.
-
-> Hesap ayarları sayfalarının bir kısmı henüz İngilizcedir; Türkçeleştirme sonraki sürümde yapılacak.
-
-- **Parola değiştirme:** *Password* bölümünde mevcut parolanızı (*Current password*) ve iki kez yeni parolanızı
-  (*New password*, *Confirm new password*) yazıp **Update password**'e basın.
-  Parola en az 8 karakter olmalı; büyük harf, küçük harf ve rakam içermelidir.
-- **Passkey ekleme:** *Passkeys* bölümünde **Add a new passkey**'e basın ve bilgisayarınızın veya telefonunuzun
-  istediği doğrulamayı (parmak izi, yüz, PIN) yapın.
-- **İki adımlı doğrulama:** *Two-factor authentication* bölümünden telefonunuzdaki bir doğrulama uygulamasıyla
-  (Google Authenticator, Microsoft Authenticator) ek güvenlik açabilirsiniz.
-
-**İlk girişte** yöneticinin size verdiği parolayı mutlaka değiştirin.
-
-## 14. Kullanıcı yönetimi (yalnızca yönetici)
-
-Menüden **Kullanıcılar**'a girin. Bu sayfayı yalnızca *Yönetici* rolündekiler görür.
+![Kullanıcılar](kilavuz-resimler/13-kullanicilar.png)
 
 ### Roller
 
 | Rol | Kimler için | Neler yapabilir |
 |---|---|---|
-| Yönetici | Klinik sahibi, sorumlu kişi | Her şey; kullanıcı açma, parola sıfırlama, hesap kapatma |
-| Diş hekimi | Hekimler | Hasta kartları, tedaviler, ödemeler |
-| Asistan | Asistan ve sekreterler | Hasta kartları, tedaviler, ödemeler. İleride randevu ve hekim adına reçete |
+| Yönetici | Klinik sahibi, sorumlu kişi | Her şey: ayarlar, kullanıcılar, kasa, fiyatlar, ödeme iptali |
+| Hekim | Diş hekimleri | Hasta, tedavi, ödeme, reçete, kasa ve fiyat listeleri, ödeme iptali |
+| Asistan | Asistan ve sekreterler | Randevu, hasta kaydı, tedavi ve ödeme girişi, hekim adına reçete |
 
 ### Yeni kullanıcı açma
 
-1. Sayfanın altındaki **Yeni kullanıcı** bölümüne gelin.
-2. **Ad soyad** ve **E-posta** yazın. E-posta, kişinin giriş adı olur.
-3. **Rol** seçin.
-4. **Hekim kaydı** seçin:
-   - Hekim hesabı açıyorsanız listeden hekimi seçin (eski programdan gelen hekimler listededir).
-     Listede yoksa **Yeni hekim kaydı oluştur**'u seçin.
-   - Asistan ve yöneticiler için genellikle **Yok** seçilir.
-5. **İlk parola** yazın (en az 8 karakter, büyük/küçük harf ve rakam).
-6. **Kullanıcı oluştur**'a basın.
-7. Giriş adını ve parolayı kişiye **yüz yüze** iletin; ilk girişte parolasını değiştirmesini söyleyin.
+1. **Ad soyad** ve **E-posta** yazın; e-posta kişinin giriş adı olur.
+2. **Rol** seçin.
+3. **Hekim kaydı:** hekim hesabı açıyorsanız listeden hekimi seçin veya **Yeni hekim kaydı oluştur**'u seçin.
+   Asistan ve yöneticiler için genellikle **Yok**.
+4. **İlk parola** yazın (en az 8 karakter, büyük/küçük harf ve rakam) ve **Kullanıcı oluştur**'a basın.
+5. Giriş adını ve parolayı kişiye **yüz yüze** iletin; ilk girişte parolasını değiştirmesini söyleyin.
 
-### Parola sıfırlama
+**Parola sıfırlama:** kullanıcının satırında **Parola** → yeni parola → **Kaydet**.
 
-Kullanıcının satırında **Parola**'ya basın, yeni parolayı yazıp **Kaydet**'e basın.
+**Hesabı kapatma:** işten ayrılan birinin hesabını silmek yerine **Devre dışı bırak**'a basın. Kişi hemen sistemden
+çıkarılır ve bir daha giremez; geçmiş kayıtları korunur. **Etkinleştir** ile geri açılır. Kendi hesabınızı kapatamazsınız.
 
-### Hesabı devre dışı bırakma
+## 15. Hesabım ve parola değiştirme
 
-İşten ayrılan birinin hesabını silmek yerine **Devre dışı bırak**'a basın. Kişi hemen sistemden çıkarılır ve bir daha
-giriş yapamaz; geçmişteki kayıtları korunur. Gerekirse **Etkinleştir** ile hesabı geri açabilirsiniz.
-Kendi hesabınızı devre dışı bırakamazsınız.
+Menünün altındaki **Hesabım**:
 
-## 15. Eski verilerle ilgili bilmeniz gerekenler
+- **Parola değiştirme:** mevcut parolanızı ve iki kez yeni parolanızı yazıp kaydedin.
+- **Passkey ekleme:** bilgisayarınızın veya telefonunuzun parmak izi, yüz tanıma ya da PIN doğrulamasıyla parolasız giriş.
+- **İki adımlı doğrulama:** telefondaki bir doğrulama uygulamasıyla (Google veya Microsoft Authenticator) ek güvenlik.
 
-- **Protokol numarası:** Her hastanın eski programdaki numarası korunmuştur; arama yaparken kullanabilirsiniz.
-- **Ad ve soyad:** Eski programda tek kutuda tutulan adın son kelimesi soyad kabul edildi. Hatalı ayrılmış bir isim görürseniz yöneticiye bildirin.
-- **Arşivdeki kayıt:** Eski programda kartı silinmiş ama tedavi kayıtları kalmış hastalar "(Eski kayıt *numara*)" adıyla arşivde durur. Kayıtlar kaybolmasın diye tutuldu.
-- **Tedaviyi yapan hekim:** Eski program bu bilgiyi tutmadığı için aktarılan tedavilerde hekim adı yok.
-- **KDV:** Eski programda bazı tedavilerin KDV bilgisi bozuktu; bunlar 0 olarak aktarıldı. **Tedavi tutarları değişmedi.**
-- **Eski kullanıcılar:** Eski programın kullanıcı adları ve şifreleri güvenlik nedeniyle aktarılmadı. Herkes için yeni hesap açılır.
-- **Geçiş günü:** Disci'ye tamamen geçmeden önce eski programa girilen son kayıtlar, yönetici tarafından bir kez daha aktarılacak. O güne kadar yeni kayıtları eski programa girmeye devam edin.
+> Hesap ayarları sayfalarının bir kısmı henüz İngilizcedir.
 
-## 16. Sık sorulan sorular
+**İlk girişte** yöneticinin verdiği parolayı mutlaka değiştirin.
 
-**Sayfa açılmıyor, "bu siteye ulaşılamıyor" diyor.**
-Disci ana bilgisayarda çalışmıyor olabilir. Yöneticiye haber verin.
+## 16. Yedekleme ve geri yükleme
+
+Kurulum, **her gece 23:30'da** otomatik yedek alacak şekilde ayarlanır:
+
+- Veritabanı ve hasta fotoğrafları `C:\DisciVeri\Yedekler` klasörüne yedeklenir; **son 14 gün** saklanır.
+- Bilgisayar o saatte kapalıysa yedek, açıldığında alınır.
+- Elle yedek almak için yönetici PowerShell'de: `C:\Disci\betikler\yedekle.ps1`
+
+> **Yedekleri başka bir yere de kopyalayın.** Bilgisayar bozulur veya çalınırsa aynı bilgisayardaki yedekler de
+> gider. Haftada bir `C:\DisciVeri\Yedekler` klasörünü harici bir diske veya USB belleğe kopyalayın ya da bu klasörü
+> OneDrive / Google Drive ile eşitleyin.
+
+**Geri yükleme:** bir yedeğe dönmek gerekirse [Kurulum rehberi](https://github.com/mehmet-cizmeci/Disci/blob/main/docs/Kurulum-Rehberi.md)'ndeki "Yedekten geri yükleme"
+adımlarını izleyin. Geri yükleme, yedekten sonra girilen kayıtları siler; emin değilseniz önce yeni bir yedek alın.
+
+## 17. Eski programdan veri aktarma
+
+Disci, **DentaLine** programlarının (DentaLineSuit 2.5 ve DentaLine 2001 2.3) verilerini aktarabilir: hastalar,
+tedaviler, ödemeler, anamnez, notlar, diş notları, fotoğraflar, fiyat listeleri ve ilaçlar.
+
+- Aktarım kurulum sırasında veya sonradan yönetici tarafından yapılır (bkz. [Kurulum rehberi](https://github.com/mehmet-cizmeci/Disci/blob/main/docs/Kurulum-Rehberi.md)).
+- Eski programdaki hasta numarası **protokol no** olarak korunur ve aranabilir.
+- Eski programlarda adlar çoğunlukla Türkçe harfsiz yazılmıştır ("Ayse", "CELIK"). Aktarım yaygın ad ve soyadları doğru
+  yazımına çevirir ("Ayşe", "ÇELİK"); listede olmayanlar olduğu gibi kalır, hasta kartındaki **Düzenle** ile düzeltilebilir.
+- İki programdan birden aktarılıyorsa aynı kişi ad, telefon ve doğum tarihiyle bulunup **tek karta** birleştirilir; iki
+  programa birden girilmiş tedavi ve ödemeler bir kez yazılır. Aynı adı taşıyan ama doğum tarihi çok farklı olan kişiler
+  ayrı kalır.
+- Eski programın kullanıcı adları ve şifreleri güvenlik nedeniyle aktarılmaz; herkes için yeni hesap açılır.
+- Eski programlar tedaviyi yapan hekimi tutmadığı için aktarılan tedavilerde hekim adı yoktur.
+- Kartı silinmiş ama kayıtları kalmış hastalar "(Eski kayıt *numara*)" adıyla arşivde durur.
+
+## 18. Sorun giderme
+
+**"Bu siteye ulaşılamıyor" diyor.**
+Sunucu bilgisayar kapalı veya uykuda olabilir. Açın ve bir dakika bekleyin. Hâlâ açılmıyorsa sunucu bilgisayarda
+*Hizmetler* (Windows tuşu → "Hizmetler") içinde **Disci Klinik Programı**'nın "Çalışıyor" olduğuna bakın; değilse sağ
+tıklayıp **Başlat**'a basın.
+
+**Diğer bilgisayardan açılıyor ama sunucuda açılmıyor (ya da tersi).**
+Sunucunun ağ bağlantısının **Özel ağ** olduğundan emin olun (Ayarlar → Ağ ve İnternet → bağlantı → Ağ profili türü: Özel).
+Ortak ağda Windows güvenlik duvarı diğer cihazları engeller.
+
+**Sunucunun IP adresi değişti, kısayol açılmıyor.**
+Modem her açılışta farklı adres verebilir. Kısayolu bilgisayar adıyla kullanın veya modemden sunucuya sabit IP verin
+(bkz. kurulum rehberi).
 
 **"E-posta veya parola yanlış" diyor.**
-Büyük/küçük harfe ve klavye dilinin (Türkçe Q) doğru olduğuna dikkat edin. 5 yanlış denemeden sonra hesap kilitlenir.
-
-**Giriş yaptım ama "Kullanıcılar" menüsünü göremiyorum.**
-Bu menü yalnızca yöneticilere görünür.
+Büyük/küçük harfe ve klavye dilinin doğru olduğuna dikkat edin. 5 yanlış denemeden sonra hesap kilitlenir.
 
 **Bir hastayı bulamıyorum.**
-Soyadın yalnızca bir kısmını veya telefonun son 4 rakamını yazmayı deneyin. Türkçe harflerle (ı, ş, ğ) ve harfsiz (i, s, g) yazmayı ayrı ayrı deneyin; eski kayıtlarda isimler farklı yazılmış olabilir. Listede **Arşiv** süzgecini de deneyin.
+Soyadın bir kısmını veya telefonun son 4 rakamını yazın; listede **Arşiv** ve **Tümü** süzgeçlerini de deneyin.
 
-**Bakiye eski programdakinden farklı.**
-Disci bakiyeyi tedavi ve ödeme kayıtlarından her seferinde yeniden hesaplar. Eski programın sakladığı borç toplamı bazen güncel değildi. Fark görürseniz hastanın Hesap sekmesindeki hareketleri kontrol edip yöneticiye bildirin.
-
-**Telefonumdan girebilir miyim?**
-Şimdilik hayır. Ağ ayarı yapıldıktan sonra klinik ağındaki tablet ve telefonlardan da girilebilecek.
-
-**Yeni hasta veya tedavi nasıl eklerim?**
-Yeni hasta: Hastalar → **Yeni hasta** (bkz. [bölüm 5](#5-hasta-arama)). Tedavi ve ödeme: hasta kartındaki **Tedavi ekle** ve **Ödeme al** (bkz. [bölüm 8](#8-tedavi-girme-ödeme-alma-makbuz)).
+**Ekranda "Beklenmeyen bir hata oluştu" şeridi çıkıyor, düğmeler çalışmıyor.**
+Sayfayı yenileyin (F5). Yalnızca bir tarayıcıda oluyorsa o tarayıcının eklentilerinden biri (özellikle WebSocket veya
+reklam engelleyici eklentiler) programla çakışıyor olabilir; başka bir tarayıcıyla deneyin.
 
 **Yanlış girilen ödemeyi nasıl silerim?**
-Ödemeler silinmez; yönetici veya hekim hasta kartının Hesap sekmesinden **iptal eder**. İptal edilen ödeme üstü çizili kalır ve bakiyeye katılmaz.
+Ödemeler silinmez; yönetici veya hekim Hesap sekmesinden **iptal eder**. İptal edilen ödeme üstü çizili kalır ve bakiyeye katılmaz.
+
+**Yönetici parolasını unuttum ve başka yönetici yok.**
+Kurulum rehberindeki "Yönetici parolasını sıfırlama" bölümüne bakın.
 
 ---
 
-## Ek: Eski DentaLineSuit programı
-
-Disci'ye tamamen geçilene kadar eski program kullanılmaya devam edilir.
-
-### Açma
-
-- Masaüstündeki veya `C:\Yazılım\DentaLineSuit` klasöründeki **DentaLineSuit** ile açın.
-- Her açılışta Windows "Bu uygulamanın cihazınızda değişiklik yapmasına izin veriyor musunuz?" diye sorar: **Evet** deyin.
-  Program klasörlerini ağda paylaşabilmek için yönetici yetkisine ihtiyaç duyar.
-- Açılışta "Posta Güvercini (Turkcell SMS Servisi) başlatılamadı" uyarısı çıkabilir; **Tamam** deyip devam edin. Yalnızca SMS özelliğini etkiler.
-
-### Sık görülen hatalar
-
-| Mesaj | Ne yapmalı |
-|---|---|
-| Gerekli dosya bulunamadı (BDE Problem) | Veritabanı motoru (BDE) eksik. Yeni bir bilgisayardaysanız aşağıdaki kurulumu yapın. |
-| Mesaj No 30: Klasör paylaştırılamadı | Program yönetici olarak açılmamış. Açılıştaki Windows sorusuna **Evet** dediğinizden emin olun. |
-| Onarım / "Repairing" ile ilgili uyarılar | Onarım programı (DentaLineSuitTamir) yarıda kesilmiş olabilir. Yöneticiye haber verin; kendiniz dosya silmeyin. |
-
-### Başka bir bilgisayara kurma
-
-1. Bu bilgisayarda programı kapatın.
-2. `C:\Yazılım\DentaLineSuit` klasörünün tamamını USB belleğe kopyalayın.
-3. Yeni bilgisayarda `KURULUM\KUR.bat` dosyasına çift tıklayın ve Windows'un sorusuna **Evet** deyin.
-4. "Kurulum tamamlandı" yazısını görünce masaüstündeki kısayolla programı açın.
-
-Ayrıntılar `KURULUM\OKUBENI.txt` dosyasındadır.
-
-> **Dikkat:** Programı iki bilgisayarda ayrı ayrı kullanmayın. Hasta kayıtları ikiye bölünür ve sonradan birleştirilemez.
-
-### Yedek
-
-Bu bilgisayardaki veritabanının değişikliklerden önceki yedeği şurada: `C:\Yazılım\DentaLineSuit\_YEDEK\`.
-Bu klasörü silmeyin.
+Disci ücretsiz ve açık kaynak kodludur (MIT lisansı). Kaynak kod, güncellemeler ve sorun bildirimi:
+<https://github.com/mehmet-cizmeci/Disci>

@@ -72,7 +72,9 @@ IF DB_ID(N'$($Script:VeritabaniAdi)') IS NULL CREATE DATABASE [$($Script:Veritab
 IF SUSER_ID(N'$($Script:ServisHesabi)') IS NULL CREATE LOGIN [$($Script:ServisHesabi)] FROM WINDOWS;
 "@
     Sql-Calistir @"
-IF USER_ID(N'$($Script:ServisHesabi)') IS NULL CREATE USER [$($Script:ServisHesabi)] FOR LOGIN [$($Script:ServisHesabi)];
+-- Başka bilgisayardan gelen bir yedek geri yüklendiyse kullanıcı bu bilgisayarın hesabına yeniden bağlanır.
+IF USER_ID(N'$($Script:ServisHesabi)') IS NULL CREATE USER [$($Script:ServisHesabi)] FOR LOGIN [$($Script:ServisHesabi)]
+ELSE ALTER USER [$($Script:ServisHesabi)] WITH LOGIN = [$($Script:ServisHesabi)];
 ALTER ROLE db_owner ADD MEMBER [$($Script:ServisHesabi)];
 "@ -veritabani $Script:VeritabaniAdi
 }
@@ -91,7 +93,7 @@ function Parola-Uygun-Mu([string]$p) {
 }
 
 function Yonetici-Bilgisi-Sor {
-    $eposta = Read-Host '   İlk yöneticinin e-postası (giriş adı)'
+    $eposta = Read-Host '   Yöneticinin e-postası (giriş adı)'
     while ($true) {
         $p1 = Read-Host '   Parola (en az 8 karakter, büyük/küçük harf ve rakam)' -AsSecureString
         $p2 = Read-Host '   Parola (tekrar)' -AsSecureString
@@ -101,24 +103,6 @@ function Yonetici-Bilgisi-Sor {
         if (-not (Parola-Uygun-Mu $d1)) { Uyari 'Parola kurala uymuyor.'; continue }
         return @{ Eposta = $eposta.Trim(); Parola = $d1 }
     }
-}
-
-# İlk yönetici, hizmet bir kez başlarken okunan geçici ortam değişkenleriyle açılır; sonra bu değişkenler silinir.
-function Ilk-Yoneticiyi-Ac($yonetici, [int]$port) {
-    $anahtar = "HKLM:\SYSTEM\CurrentControlSet\Services\$($Script:ServisAdi)"
-    Set-ItemProperty -Path $anahtar -Name Environment -Type MultiString -Value @(
-        "Seed__AdminEmail=$($yonetici.Eposta)", "Seed__AdminPassword=$($yonetici.Parola)")
-    try {
-        Restart-Service $Script:ServisAdi -Force
-        $bitis = (Get-Date).AddSeconds(120)
-        while ((Get-Date) -lt $bitis -and (Kullanici-Sayisi) -eq 0) { Start-Sleep -Seconds 3 }
-    } finally {
-        Remove-ItemProperty -Path $anahtar -Name Environment -ErrorAction SilentlyContinue
-    }
-    if ((Kullanici-Sayisi) -eq 0) {
-        throw "İlk yönetici oluşturulamadı. Olay Görüntüleyicisi > Windows Günlükleri > Uygulama altında 'Disci' kayıtlarına bakın."
-    }
-    Tamam "İlk yönetici oluşturuldu: $($yonetici.Eposta)"
 }
 
 function Program-Yanit-Veriyor-Mu([int]$port) {

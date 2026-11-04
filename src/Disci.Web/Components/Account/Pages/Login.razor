@@ -23,6 +23,7 @@
                 </div>
                 <h1 class="h4 mb-1">Hoş geldiniz</h1>
                 <p class="text-secondary mb-4">Kullanıcı adınız ve parolanızla giriş yapın.</p>
+                @if (Kurulum == 1) { <div class="alert alert-success">Kurulum tamamlandı. Şimdi oluşturduğunuz e-posta ve parolayla giriş yapın.</div> }
                 <StatusMessage Message="@errorMessage" />
                 <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
                     <DataAnnotationsValidator />
@@ -48,6 +49,7 @@
                         <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Passkey ile giriş yap</PasskeySubmit>
                     </div>
                     <p class="text-secondary small mt-3 mb-0">Hesabınız yoksa veya parolanızı unuttuysanız klinik yöneticisine başvurun.</p>
+                    <p class="small mt-2 mb-0"><a href="kilavuz">Kullanım kılavuzu</a></p>
                 </EditForm>
             </div>
         </section>
@@ -66,6 +68,9 @@
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    private int? Kurulum { get; set; }
 
     protected override async Task OnInitializedAsync()
     {

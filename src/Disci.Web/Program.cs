@@ -64,6 +64,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Lockout.MaxFailedAccessAttempts = 5;
     })
     .AddRoles<IdentityRole>()
+    .AddErrorDescriber<TurkishIdentityErrors>()
     .AddEntityFrameworkStores<DisciDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
@@ -75,6 +76,10 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ClinicEvents>();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<ClinicInfo>();
+builder.Services.AddSingleton<FirstRunSetup>();
+builder.Services.AddScoped<SetupService>();
+builder.Services.AddSingleton<UserGuide>();
 
 var app = builder.Build();
 
@@ -101,6 +106,7 @@ app.UseHttpsRedirection();
 // Explicit so that re-executed status-code requests (e.g. /not-found) also pass through them.
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseFirstRunSetup();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -109,6 +115,7 @@ app.MapRazorComponents<App>()
 
 app.MapAdditionalIdentityEndpoints();
 app.MapPatientFiles();
+app.MapUserGuideFiles();
 
 using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<IdentitySeeder>().RunAsync();

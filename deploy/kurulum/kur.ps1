@@ -4,6 +4,7 @@ param(
     [string]$Hedef = 'C:\Disci',
     [string]$VeriKlasoru = 'C:\DisciVeri',
     [string]$EskiVeri = '',
+    [string]$Dl2001Veri = '',
     [int]$HttpPort = 5111,
     [int]$HttpsPort = 5443,
     [switch]$YeniSertifika,
@@ -48,10 +49,18 @@ try {
     if ($EskiVeri -and -not (Test-Path (Join-Path $EskiVeri 'DLHASTA.DB'))) {
         throw "Eski veri klasöründe DLHASTA.DB bulunamadı: $EskiVeri (DentaLineSuit\DL2500DB klasörünü gösterin)"
     }
-    if (-not $EskiVeri -and -not $Deneme -and (Evet-Mi 'Eski DentaLineSuit verileri bu kurulumda aktarılsın mı?' $false)) {
+    # SQL Server bu aşamada henüz kurulu olmayabilir: o zaman ilk kurulum sayılır.
+    $kullaniciVar = $false
+    if (-not $Deneme) { try { $kullaniciVar = (Kullanici-Sayisi) -gt 0 } catch { $kullaniciVar = $false } }
+    if (-not $EskiVeri -and -not $Deneme -and -not $kullaniciVar -and (Evet-Mi 'Eski DentaLineSuit verileri bu kurulumda aktarılsın mı? (Eski program kullanmadıysanız hayır deyin)' $false)) {
         $EskiVeri = (Read-Host '   DL2500DB klasörünün yolu (ör. D:\DentaLineSuit\DL2500DB)').Trim('" ')
         if (-not (Test-Path (Join-Path $EskiVeri 'DLHASTA.DB'))) { throw "Bu klasörde DLHASTA.DB yok: $EskiVeri" }
+        if (-not $Dl2001Veri -and (Evet-Mi 'DentaLine 2001 (2.3) programına girilmiş kayıtlar da var mı?' $false)) {
+            $Dl2001Veri = (Read-Host '   DentaLine 2001 veri klasörünün yolu (ör. D:\DL2001\DB)').Trim('" ')
+        }
     }
+    if ($Dl2001Veri -and -not (Test-Path (Join-Path $Dl2001Veri 'DLHASTA.DB'))) { throw "DentaLine 2001 klasöründe DLHASTA.DB yok: $Dl2001Veri" }
+    if ($Dl2001Veri -and -not $EskiVeri) { throw 'DentaLine 2001 verisi, DentaLineSuit verisiyle birlikte aktarılır (-EskiVeri de verin).' }
     Tamam 'Tamam.'
 
     # ------------------------------------------------------------------
@@ -103,7 +112,7 @@ try {
     }
     Yap "Yardımcı betikler kopyalanıyor: $betikler" {
         New-Item -ItemType Directory -Force -Path $betikler | Out-Null
-        foreach ($b in 'ortak.ps1', 'yedekle.ps1', 'veri-aktar.ps1', 'kaldir.ps1', 'OKUBENI.md') {
+        foreach ($b in 'ortak.ps1', 'yedekle.ps1', 'geri-yukle.ps1', 'parola-sifirla.ps1', 'veri-aktar.ps1', 'kaldir.ps1', 'OKUBENI.md', 'disci.ico') {
             Copy-Item (Join-Path $Paket $b) $betikler -Force
         }
     }
@@ -198,6 +207,11 @@ try {
             Bilgi "Eski veriler aktarılıyor: $EskiVeri"
             & (Join-Path $aktarim 'Disci.LegacyImport.exe') --source $EskiVeri --connection (Baglanti-Metni) --files $dosyalar | Out-Host
             if ($LASTEXITCODE -ne 0) { throw "Veri aktarımı başarısız (çıkış kodu $LASTEXITCODE). Yukarıdaki mesaja bakın." }
+            if ($Dl2001Veri) {
+                Bilgi "DentaLine 2001 kayıtları ekleniyor (aynı hastalar birleştirilir): $Dl2001Veri"
+                & (Join-Path $aktarim 'Disci.LegacyImport.exe') --dl2001 $Dl2001Veri --connection (Baglanti-Metni) --files $dosyalar | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "DentaLine 2001 aktarımı başarısız (çıkış kodu $LASTEXITCODE). Yukarıdaki mesaja bakın." }
+            }
             Tamam "Aktarım tamam. Rapor: $(Join-Path $VeriKlasoru 'reports')"
         } elseif ($EskiVeri) {
             Uyari "Veritabanında zaten $hastaSayisi hasta var; aktarım atlandı. Yeniden aktarmak için: $betikler\veri-aktar.ps1"
@@ -232,15 +246,29 @@ try {
     if (-not $Deneme) { Tamam 'Program çalışıyor.' }
 
     # ------------------------------------------------------------------
-    Baslik '10. İlk yönetici hesabı'
-    if ($Deneme) {
-        Bilgi '[DENEME] Hiç kullanıcı yoksa ilk yöneticinin e-postası ve parolası sorulacak.'
-    } elseif ((Kullanici-Sayisi) -gt 0) {
-        Bilgi 'Kullanıcı hesapları zaten var; atlandı.'
-    } else {
-        $yonetici = Yonetici-Bilgisi-Sor
-        Ilk-Yoneticiyi-Ac $yonetici $HttpPort
-        $yonetici = $null
+    Baslik '10. Masaüstü kısayolu ve diğer bilgisayarlar için bağlantı paketi'
+    $baglantiKlasoru = Join-Path $VeriKlasoru 'Disci-Baglanti'
+    Yap 'Bu bilgisayarın masaüstüne (bütün kullanıcılar) Disci kısayolu ekleniyor' {
+        $masaustu = [Environment]::GetFolderPath('CommonDesktopDirectory')
+        $metin = "[InternetShortcut]`r`nURL=https://localhost:$HttpsPort/`r`nIconFile=$betikler\disci.ico`r`nIconIndex=0`r`n"
+        [IO.File]::WriteAllText((Join-Path $masaustu 'Disci.url'), $metin, (New-Object Text.UTF8Encoding $false))
+    }
+    Yap "Diğer bilgisayarlar için bağlantı paketi hazırlanıyor: $baglantiKlasoru" {
+        New-Item -ItemType Directory -Force -Path $baglantiKlasoru | Out-Null
+        Copy-Item (Join-Path $Paket 'baglanti\*') $baglantiKlasoru -Force
+        Copy-Item (Join-Path $Paket 'disci.ico') $baglantiKlasoru -Force
+        Copy-Item (Join-Path $sertifikaKlasoru 'Disci.cer') $baglantiKlasoru -Force
+        $ilkIp = @($ipler | Where-Object { $_ -match '^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))' })[0]
+        $sunucuTxt = "# Disci sunucusu (kurulum yazdı)`r`nSunucu=$bilgisayar`r`nIP=$ilkIp`r`nHttpsPort=$HttpsPort`r`n"
+        [IO.File]::WriteAllText((Join-Path $baglantiKlasoru 'sunucu.txt'), $sunucuTxt, (New-Object Text.UTF8Encoding $false))
+    }
+    if (-not $Deneme -and (Evet-Mi "Bağlantı paketi ağda paylaşılsın mı? (Diğer bilgisayarlar \\$bilgisayar\Disci-Baglanti adresinden çalıştırır; içinde hasta bilgisi yoktur)" $true)) {
+        Yap 'Bağlantı paketi salt okunur paylaşılıyor: Disci-Baglanti' {
+            if (-not (Get-SmbShare -Name 'Disci-Baglanti' -ErrorAction SilentlyContinue)) {
+                $herkes = (New-Object Security.Principal.SecurityIdentifier 'S-1-1-0').Translate([Security.Principal.NTAccount]).Value
+                New-SmbShare -Name 'Disci-Baglanti' -Path $baglantiKlasoru -ReadAccess $herkes -Description 'Disci bağlantı paketi' | Out-Null
+            }
+        }
     }
 
     # ------------------------------------------------------------------
@@ -273,15 +301,24 @@ try {
 
     # ------------------------------------------------------------------
     Baslik 'Kurulum tamamlandı'
-    Bilgi "Bu bilgisayardan          : https://localhost:$HttpsPort"
+    Bilgi "Bu bilgisayardan          : masaüstündeki 'Disci' kısayolu (https://localhost:$HttpsPort)"
     Bilgi "Klinik ağındaki cihazlardan: https://${bilgisayar}:$HttpsPort"
     foreach ($ip in $ipler) { Bilgi "                           https://${ip}:$HttpsPort" }
     Bilgi ''
-    Bilgi "Tablet/telefon/diğer bilgisayarlarda 'güvenli değil' uyarısı çıkmaması için şu dosyayı o cihazlara kurun:"
-    Bilgi "   $sertifikaKlasoru\Disci.cer   (ayrıntı: OKUBENI.md)"
-    Bilgi "Yedekler : $yedekler"
+    Bilgi 'Diğer bilgisayarlarda bir kez şunu çalıştırın (kısayol ve sertifika kurar):'
+    Bilgi "   \\$bilgisayar\Disci-Baglanti\Baglanti-Kur.bat   (paylaşım yoksa $baglantiKlasoru klasörünü USB ile götürün)"
+    Bilgi "Tablet ve telefonlar için sertifika: $sertifikaKlasoru\Disci.cer (ayrıntı: OKUBENI.md)"
+    Bilgi "Yedekler : $yedekler (her gece 23:30; haftada bir harici diske de kopyalayın)"
     Bilgi "Kayıt    : $(Join-Path $logKlasoru "kurulum_log_$zaman.txt")"
-    if ($Deneme) { Bilgi 'Deneme modu bitti; hiçbir değişiklik yapılmadı.' }
+    if ($Deneme) {
+        Bilgi 'Deneme modu bitti; hiçbir değişiklik yapılmadı.'
+    } elseif ((Kullanici-Sayisi) -eq 0) {
+        Write-Host ''
+        Tamam 'Şimdi tarayıcıda İLK KURULUM FORMU açılıyor: klinik bilgilerini ve yönetici hesabını girin.'
+        Start-Process "https://localhost:$HttpsPort/kurulum"
+    } else {
+        Start-Process "https://localhost:$HttpsPort/"
+    }
     $sonuc = 0
 } catch {
     Write-Host ''

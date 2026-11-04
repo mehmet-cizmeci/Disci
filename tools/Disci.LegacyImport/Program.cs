@@ -44,6 +44,20 @@ var source = Option("--source", @"C:\Yazılım\DentaLineSuit\DL2500DB");
 var connection = Option("--connection", Environment.GetEnvironmentVariable("DISCI_DB") ?? DisciDbContext.DefaultConnection);
 var filesDir = Option("--files", @"C:\Yazılım\Disci\data\files");
 
+if (Flag("--parola-sifirla"))
+{
+    var email = Option("--parola-sifirla", "");
+    var password = Environment.GetEnvironmentVariable("DISCI_YENI_PAROLA");
+    if (string.IsNullOrWhiteSpace(email) || email.StartsWith("--", StringComparison.Ordinal) || string.IsNullOrEmpty(password))
+    {
+        Console.Error.WriteLine("Kullanım: parola-sifirla.ps1 betiğini çalıştırın (e-posta ve parola sorar).");
+        return 2;
+    }
+    await using var pdb = new DisciDbContext(DisciDbContext.CreateOptions(connection));
+    Console.WriteLine(await PasswordReset.RunAsync(pdb, email, password));
+    return 0;
+}
+
 if (Flag("--isim-duzelt"))
 {
     bool dry = Flag("--dry-run");

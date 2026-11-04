@@ -1,0 +1,39 @@
+@page "/kilavuz"
+@attribute [AllowAnonymous]
+@inject UserGuide Guide
+
+<PageTitle>Kullanım kılavuzu</PageTitle>
+
+<div class="guide">
+    <div class="page-head">
+        <div>
+            <h1>Kullanım kılavuzu</h1>
+            <p class="text-secondary mb-0">Disci'nin bütün ekranları adım adım.</p>
+        </div>
+        <div class="d-flex gap-2 d-print-none">
+            @if (Guide.HasPdf)
+            {
+                <a class="btn btn-light" href="kilavuz.pdf" download><Icon Name="download" /> PDF indir</a>
+            }
+            <button type="button" class="btn btn-light" onclick="window.print()"><Icon Name="printer" /> Yazdır</button>
+        </div>
+    </div>
+
+    <div class="guide-grid">
+        @if (Guide.Contents.Count > 0)
+        {
+            <nav class="guide-toc panel d-print-none" aria-label="İçindekiler">
+                <div class="panel-body">
+                    <div class="side-label px-0">İçindekiler</div>
+                    @foreach (var (id, title) in Guide.Contents)
+                    {
+                        <a href="kilavuz#@id">@title</a>
+                    }
+                </div>
+            </nav>
+        }
+        <article class="guide-body panel">
+            <div class="panel-body">@((MarkupString)Guide.Html)</div>
+        </article>
+    </div>
+</div>

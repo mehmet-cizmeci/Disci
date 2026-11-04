@@ -1,5 +1,5 @@
 ﻿# Geçiş günü için: Disci'deki verileri silip DentaLineSuit'ten baştan aktarır.
-# Önce bir yedek alır. Kullanıcı hesapları da silinir; sonunda ilk yönetici yeniden açılır.
+# Önce bir yedek alır. Kullanıcı hesapları da silinir; sonunda tarayıcıda ilk kurulum formu açılır.
 # Kullanım (yönetici PowerShell): .\veri-aktar.ps1 -EskiVeri "D:\DentaLineSuit\DL2500DB" [-Dl2001Veri "D:\DL2001\DB"]
 # -Dl2001Veri verilirse DentaLine 2001 kayıtları da eklenir (hastalar eşleştirilir, mükerrer kayıtlar atlanır).
 param(
@@ -23,7 +23,6 @@ try {
     Write-Host 'DİKKAT: Disci''deki bütün hasta kayıtları ve kullanıcı hesapları silinip eski programdan yeniden aktarılacak.' -ForegroundColor Yellow
     Write-Host '         DentaLineSuit''i kapatın; aktarım sırasında kimse kayıt girmesin.' -ForegroundColor Yellow
     if (-not (Evet-Mi 'Devam edilsin mi?' $false)) { Write-Host 'Vazgeçildi.'; exit 0 }
-    $yonetici = Yonetici-Bilgisi-Sor
 
     Baslik '1. Güvenlik yedeği'
     & (Join-Path $PSScriptRoot 'yedekle.ps1') -YedekKlasoru (Join-Path $VeriKlasoru 'Yedekler') -DosyaKlasoru (Join-Path $VeriKlasoru 'files')
@@ -44,11 +43,11 @@ try {
     Yedek-Veritabani-Yetkisi
     Start-Service $Script:ServisAdi
     if (-not (Program-Yanit-Veriyor-Mu $HttpPort)) { throw 'Program yanıt vermiyor; Olay Görüntüleyicisi''ne bakın.' }
-    Ilk-Yoneticiyi-Ac $yonetici $HttpPort
-    $yonetici = $null
 
     Tamam "Aktarım tamamlandı. Rapor: $(Join-Path $VeriKlasoru 'reports')"
-    Write-Host '   Diğer kullanıcı hesaplarını Kullanıcılar sayfasından yeniden açın.'
+    Write-Host '   Tarayıcıda ilk kurulum formu açılıyor: klinik bilgilerini ve yönetici hesabını yeniden girin.'
+    Write-Host '   Diğer kullanıcı hesaplarını sonra Kullanıcılar sayfasından açın.'
+    Start-Process 'https://localhost:5443/kurulum'
     exit 0
 } catch {
     Write-Host "HATA: $($_.Exception.Message)" -ForegroundColor Red

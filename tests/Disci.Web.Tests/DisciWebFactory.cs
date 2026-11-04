@@ -15,7 +15,7 @@ namespace Disci.Web.Tests;
 /// Runs the real app against a throw-away LocalDB database filled with made-up data, deleted afterwards.
 /// Requests carrying the X-Test-Role header are signed in as a fake user with that role; no account or password is involved.
 /// </summary>
-public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string RoleHeader = "X-Test-Role";
 
@@ -26,6 +26,8 @@ public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLife
 
     /// <summary>"Development" serves static web assets (blazor.web.js) the way `dotnet run` does.</summary>
     public string EnvironmentName { get; init; } = "Testing";
+    /// <summary>True only for the tests of the first-run setup form; the others start without accounts and must not be redirected.</summary>
+    public bool FirstRunSetupEnabled { get; init; }
 
     private string ConnectionString =>
         $@"Server=(localdb)\MSSQLLocalDB;Database={_database};Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
@@ -36,6 +38,8 @@ public sealed class DisciWebFactory : WebApplicationFactory<Program>, IAsyncLife
         // Never create the real first administrator (user-secrets) in a test database.
         builder.UseSetting("Seed:AdminEmail", "");
         builder.UseSetting("Seed:AdminPassword", "");
+        // The tests start without accounts; the first-run setup page has its own tests.
+        builder.UseSetting("FirstRunSetup:Enabled", FirstRunSetupEnabled ? "true" : "false");
         builder.UseSetting("ConnectionStrings:DefaultConnection", ConnectionString);
         builder.UseSetting("FileStorage:Root", _filesRoot);
         builder.UseSetting("Database:MigrateOnStartup", "true");
@@ -169,7 +173,7 @@ public sealed class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions>
         var identity = new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, "test-user"),
-            new Claim(ClaimTypes.Name, "test@disci.local"),
+            new Claim(ClaimTypes.Name, Request.Cookies["test-name"] ?? "test@disci.local"),
             new Claim(ClaimTypes.Role, role.ToString()),
         ], SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));

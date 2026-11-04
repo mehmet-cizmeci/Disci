@@ -30,12 +30,14 @@
         </Authorized>
         <NotAuthorized>
             <NavLink class="nav-link" href="Account/Login"><Icon Name="user" /> Giriş</NavLink>
+            <NavLink class="nav-link" href="kilavuz"><Icon Name="book" /> Kullanım kılavuzu</NavLink>
         </NotAuthorized>
     </AuthorizeView>
 </nav>
 
 <AuthorizeView>
     <div class="side-foot">
+        <NavLink class="nav-link d-flex align-items-center gap-2 px-2 py-2 text-body" href="kilavuz"><Icon Name="book" /> Kullanım kılavuzu</NavLink>
         <NavLink class="nav-link d-flex align-items-center gap-2 px-2 py-2 text-body" href="Account/Manage"><Icon Name="user" /> Hesabım</NavLink>
         <form action="Account/Logout" method="post">
             <AntiforgeryToken />

@@ -20,3 +20,8 @@ data/
 
 # Kurulum paketi çıktısı
 dist/
+
+# Kişiye özel kurulum notları (klasör yolları)
+KURULUM-YAPILACAKLARIM.md
+# PDF üretimi sırasında kalan ara dosya
+docs/*.html

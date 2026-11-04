@@ -1,6 +1,6 @@
 @page "/recete/{Id:int}"
 @inject IDbContextFactory<DisciDbContext> DbFactory
-@inject IConfiguration Config
+@inject ClinicInfo Clinic
 
 <PageTitle>Reçete - Disci</PageTitle>
 
@@ -28,9 +28,9 @@ else
                     @if (rx.Dentist.DiplomaNo is not null) { <div class="small text-secondary">Diploma no: @rx.Dentist.DiplomaNo</div> }
                 </div>
                 <div class="text-end small">
-                    <div class="fw-650">@(Config["Clinic:Name"] ?? "Diş Kliniği")</div>
-                    <div class="text-secondary">@Config["Clinic:Address"]</div>
-                    <div class="text-secondary">@Config["Clinic:Phone"]</div>
+                    <div class="fw-650">@clinic?.Name</div>
+                    <div class="text-secondary">@clinic?.Address</div>
+                    <div class="text-secondary">@clinic?.Phone</div>
                 </div>
             </div>
 
@@ -89,8 +89,11 @@ else
     private Prescription? rx;
     private string? writer;
 
+    private Disci.Domain.ClinicProfile? clinic;
+
     protected override async Task OnInitializedAsync()
     {
+        clinic = await Clinic.GetAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
         rx = await db.Prescriptions.AsNoTracking()
             .Include(p => p.Dentist).Include(p => p.Items)

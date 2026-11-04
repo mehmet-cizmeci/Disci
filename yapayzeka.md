@@ -5,8 +5,9 @@ Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kada
 
 - Son güncelleme: 2026-11-04
 - Hedefler ve istenen modüller: [Yapilacak.md](Yapilacak.md)
-- Kurulum ve komutlar: [README.md](README.md)
-- Son kullanıcı belgesi: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md)
+- Tanıtım (GitHub sayfası): [README.md](README.md); komutlar ve proje yapısı: [docs/Gelistirici.md](docs/Gelistirici.md)
+- Kurulum: [docs/Kurulum-Rehberi.md](docs/Kurulum-Rehberi.md); son kullanıcı: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md) (+ PDF)
+- Kullanıcının kendi kurulum yapılacakları: `KURULUM-YAPILACAKLARIM.md` (Git dışı)
 
 ## Gizlilik kuralı
 
@@ -237,6 +238,28 @@ Kullanıcı, adlarda Türkçe harflerin neden görünmediğini sordu. Eski iki p
 - Rapor (eski → yeni, hasta adlarıyla) `data/reports/isim-duzeltme-*.md`. Raporun sonunda listede olmadığı için
   değişmeyen sık kelimeler var; sözlüğü genişletmek için kullanılabilir.
 
+## 6. Kurulum, açık kaynak ve kullanım kılavuzu (2026-11-04)
+
+Kullanıcı: program hekimin Windows 11 Home bilgisayarına `C:\` altına kurulacak, hizmet olarak sürekli çalışacak,
+masaüstü kısayolu, ağdan erişim ve günlük yedek olacak; GitHub'da açık kaynak ve ücretsiz olarak yayınlanacak (hasta
+verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içinde kılavuz ve PDF'i olacak. Tam yetki verdi.
+
+- **İlk kurulum formu** `/kurulum` (`FirstRunSetupPage.razor`, `Services/ClinicInfo.cs`: `FirstRunSetup`, `SetupService`):
+  hiç hesap yokken `/` ve `/Account/Login` buraya yönlenir. Klinik bilgileri + yönetici (+ isteğe bağlı hekim kaydı) tek
+  işlemde. Yalnızca yerel istek (loopback) kabul edilir; ağdan biri yöneticiliği kapamasın diye. `FirstRunSetup:Enabled=false`
+  ile kapanır (entegrasyon testleri hesapsız başladığı için `DisciWebFactory` kapatır; `SetupWebFactory` açar).
+- **Klinik bilgileri** veritabanında (`ClinicProfile`, migration `ClinicProfile`); `ClinicInfo` makbuz/reçeteye verir, yoksa
+  `appsettings` → `Clinic`. Klinik ayarlarında düzenlenir. Identity hata mesajları Türkçe (`TurkishIdentityErrors`).
+- **Kılavuz** tek kaynak `docs/Kullanim-Kilavuzu.md`: program `/kilavuz` (Markdig, `UserGuide.cs`; csproj dosyayı `Kilavuz\`
+  altına kopyalar), `/kilavuz.pdf`, `/kilavuz-resimler/*`; girişsiz okunur. PDF `docs/kilavuz-pdf.ps1` (Chrome). Ekran
+  görüntüleri uydurma örnek klinikten: `GuideScreenshotServer` (`DISCI_DEMO=1|kurulum`, port 5223) + `docs/ekran-goruntuleri.mjs`.
+- **Kurulum betiği**: masaüstü kısayolu (`disci.ico`, Public Desktop `.url`), `C:\DisciVeri\Disci-Baglanti` bağlantı paketi
+  (sertifika + `Baglanti-Kur.bat` + `sunucu.txt`, isteğe bağlı salt okunur SMB paylaşımı), `-Dl2001Veri`, yönetici artık
+  konsolda değil tarayıcıdaki formla açılır. Yeni betikler: `geri-yukle.ps1`, `parola-sifirla.ps1` (aktarım aracında
+  `--parola-sifirla`, parola ortam değişkeniyle). `kur.ps1 -Deneme` bütün adımlarıyla geçti; gerçek Windows 11 Home'da denenmedi.
+- **Açık kaynak**: MIT `LICENSE`, README tanıtım sayfası (özellikler, ekran görüntüleri), teknik içerik `docs/Gelistirici.md`'de.
+  Depo gizli (`api.github.com` 404) ve `gh` oturumu yok: herkese açma ve Release kullanıcıda (`KURULUM-YAPILACAKLARIM.md`).
+
 ## Öğrenilen tuzaklar
 
 - **PowerShell 5.1 betikleri** Türkçe karakter içeriyorsa UTF-8 **BOM'lu** kaydedilmeli; yoksa yollar (`Yazılım`) bozuluyor.
@@ -292,6 +315,12 @@ Kullanıcı, adlarda Türkçe harflerin neden görünmediğini sordu. Eski iki p
 - ~~Reçete modülü~~ (2026-11-02 yapıldı); E-Reçete entegrasyonu; ~~reçete şablonları~~ (2026-11-02 yapıldı)
 - Taksit/senet planı; gider girişi ekranı
 - SMS / WhatsApp Business ile otomatik hatırlatma (şimdilik yalnızca tek tıkla açılan wa.me bağlantısı var; mesajı kişi gönderir)
-- Klinik adı/adresi için ayar ekranı (şimdilik `appsettings.json` → `Clinic`)
-- Ağdan erişim (tablet/telefon), gerekirse JWT'li API
-- Git deposu (henüz yok; `.gitignore` hazır, `data/` asla depoya girmemeli)
+- ~~Klinik adı/adresi için ayar ekranı~~ (2026-11-04: `ClinicProfile`, Klinik ayarları + ilk kurulum formu)
+- ~~Ağdan erişim (tablet/telefon)~~ (kurulum betiği: HTTPS, güvenlik duvarı, bağlantı paketi); gerekirse JWT'li API
+- Hesap (Account/Manage) sayfalarını Türkçeleştirmek
+- Gerçek hedef bilgisayarda (Windows 11 Home) ilk tam kurulum: henüz yapılmadı
+- GitHub: depo gizli; herkese açma ve Release (zip) kullanıcıda (`gh` oturumu yok)
+- Yeni bir "hesap yoksa yönlendir" kuralı, hesapsız başlayan entegrasyon testlerini bozar: bu tür kurallara ayarla kapatma ekleyin (`FirstRunSetup:Enabled`).
+- `perl -0pi -e 's|...|...|'` içinde desende `||` geçerse ayraçla çakışır ve metin dosyanın başına yazılır; Türkçe ve özel karakterli düzenlemelerde Edit aracını kullanın.
+- Blazor sayfasının adı bir `@inject` adıyla aynı olamaz (`Setup` sayfasında `SetupService Setup` → CS0542); sayfalara `...Page` adı verin.
+- `Copy-Item klasor\* hedef` alt klasörlerin içini kopyalamaz; `-Recurse` gerekir (kurulum paketindeki `baglanti\`).

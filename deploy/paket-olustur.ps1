@@ -35,7 +35,11 @@ Calistir 'Aktarım aracı derlemesi' {
 }
 
 Adim 'Kurulum betikleri kopyalanıyor'
-Copy-Item (Join-Path $PSScriptRoot 'kurulum\*') $paket -Force
+Copy-Item (Join-Path $PSScriptRoot 'kurulum\*') $paket -Recurse -Force
+foreach ($belge in 'Kurulum-Rehberi.md', 'Kullanim-Kilavuzu.pdf', 'Kullanim-Kilavuzu.md') {
+    Copy-Item (Join-Path $depo "docs\$belge") $paket -Force
+}
+Copy-Item (Join-Path $depo 'LICENSE') (Join-Path $paket 'LISANS.txt') -Force
 
 $surum = Get-Date -Format 'yyyyMMdd-HHmm'
 $zip = Join-Path $Cikti "Disci-Kurulum-$surum.zip"

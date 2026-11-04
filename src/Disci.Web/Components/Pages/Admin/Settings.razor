@@ -2,13 +2,35 @@
 @attribute [Authorize(Roles = Roles.Admin)]
 @rendermode InteractiveServer
 @inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicInfo Clinic
 
 <PageTitle>Klinik ayarları - Disci</PageTitle>
 
 <div class="page-head">
     <div>
         <h1>Klinik ayarları</h1>
-        <div class="sub">Hekimler, çalışma saatleri ve randevu türleri</div>
+        <div class="sub">Klinik bilgileri, hekimler, çalışma saatleri ve randevu türleri</div>
+    </div>
+</div>
+
+<div class="panel mb-4">
+    <div class="panel-head">
+        <Icon Name="home" /><h2>Klinik bilgileri</h2>
+        <div class="actions"><span class="small text-secondary">Makbuz ve reçetelerin başında yazar</span></div>
+    </div>
+    <div class="panel-body">
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label" for="c-name">Klinik adı</label><input id="c-name" class="form-control" @bind="clinic.Name" /></div>
+            <div class="col-md-3"><label class="form-label" for="c-phone">Telefon</label><input id="c-phone" class="form-control" @bind="clinic.Phone" /></div>
+            <div class="col-md-3"><label class="form-label" for="c-mail">E-posta</label><input id="c-mail" class="form-control" @bind="clinic.Email" /></div>
+            <div class="col-md-6"><label class="form-label" for="c-addr">Adres</label><textarea id="c-addr" class="form-control" rows="2" @bind="clinic.Address"></textarea></div>
+            <div class="col-md-3"><label class="form-label" for="c-taxo">Vergi dairesi</label><input id="c-taxo" class="form-control" @bind="clinic.TaxOffice" /></div>
+            <div class="col-md-3"><label class="form-label" for="c-taxn">Vergi no</label><input id="c-taxn" class="form-control" @bind="clinic.TaxNo" /></div>
+        </div>
+        <div class="d-flex align-items-center gap-3 mt-3">
+            <button class="btn btn-primary" @onclick="SaveClinic"><Icon Name="check" /> Klinik bilgilerini kaydet</button>
+            @if (clinicMessage is not null) { <span class="small @(clinicSaved ? "text-success" : "text-danger")">@clinicMessage</span> }
+        </div>
     </div>
 </div>
 
@@ -133,7 +155,24 @@
         set { if (type is not null) type.Color = value; }
     }
 
-    protected override async Task OnInitializedAsync() => await Load();
+    private ClinicProfile clinic = new() { Name = "" };
+    private string? clinicMessage;
+    private bool clinicSaved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        clinic = await Clinic.GetAsync();
+        await Load();
+    }
+
+    private async Task SaveClinic()
+    {
+        clinicSaved = false;
+        if (string.IsNullOrWhiteSpace(clinic.Name)) { clinicMessage = "Klinik adı gerekli."; return; }
+        await Clinic.SaveAsync(clinic);
+        clinicSaved = true;
+        clinicMessage = "Kaydedildi.";
+    }
 
     private async Task Load()
     {

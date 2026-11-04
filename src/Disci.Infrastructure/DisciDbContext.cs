@@ -37,6 +37,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
     public DbSet<PatientPhoto> PatientPhotos => Set<PatientPhoto>();
     public DbSet<PatientNote> PatientNotes => Set<PatientNote>();
     public DbSet<PatientLegacyNumber> PatientLegacyNumbers => Set<PatientLegacyNumber>();
+    public DbSet<ClinicProfile> ClinicProfiles => Set<ClinicProfile>();
     public DbSet<Procedure> Procedures => Set<Procedure>();
     public DbSet<PriceList> PriceLists => Set<PriceList>();
     public DbSet<PriceListItem> PriceListItems => Set<PriceListItem>();
@@ -67,6 +68,12 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
         {
             e.Property(x => x.FullName).HasMaxLength(100);
             e.HasOne(x => x.Dentist).WithMany().HasForeignKey(x => x.DentistId);
+        });
+
+        b.Entity<ClinicProfile>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Address).HasMaxLength(500);
         });
 
         b.Entity<Dentist>(e =>
