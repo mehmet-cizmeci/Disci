@@ -37,7 +37,7 @@
                     <span>
                         <span class="fw-650">@context.FirstName @context.LastName</span>
                         @if (context.IsArchived) { <span class="chip chip-muted ms-1">Arşiv</span> }
-                        <span class="d-block small text-secondary">#@(context.LegacyId ?? context.Id)</span>
+                        <span class="d-block small text-secondary">@Display.Protocol(context.Id, context.LegacyId, context.Dl2001Protocol)</span>
                     </span>
                 </a>
             </TemplateColumn>
@@ -92,6 +92,7 @@
     {
         public int Id { get; init; }
         public int? LegacyId { get; init; }
+        public int? Dl2001Protocol { get; init; }
         public string FirstName { get; init; } = "";
         public string LastName { get; init; } = "";
         public string? MobilePhone { get; init; }
@@ -160,6 +161,7 @@
         {
             Id = p.Id,
             LegacyId = p.LegacyId,
+            Dl2001Protocol = p.Dl2001Protocol,
             FirstName = p.FirstName,
             LastName = p.LastName,
             MobilePhone = p.MobilePhone,

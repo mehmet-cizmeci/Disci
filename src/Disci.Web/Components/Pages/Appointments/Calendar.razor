@@ -175,7 +175,7 @@
                 dentistFilter = mine;
             if (PatientParam is { } pid)
                 newPatient = await db.Patients.Where(p => p.Id == pid)
-                    .Select(p => new PatientPicker.PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId))
+                    .Select(p => new PatientPicker.PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId, p.Dl2001Protocol))
                     .FirstOrDefaultAsync();
         }
 

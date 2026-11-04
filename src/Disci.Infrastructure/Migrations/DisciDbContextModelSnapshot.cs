@@ -484,6 +484,9 @@ namespace Disci.Infrastructure.Migrations
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<int?>("Dl2001Protocol")
+                        .HasColumnType("int");
+
                     b.Property<string>("Email")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -585,6 +588,10 @@ namespace Disci.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Dl2001Protocol")
+                        .IsUnique()
+                        .HasFilter("[Dl2001Protocol] IS NOT NULL");
+
                     b.HasIndex("LegacyId")
                         .IsUnique()
                         .HasFilter("[LegacyId] IS NOT NULL");
@@ -600,6 +607,41 @@ namespace Disci.Infrastructure.Migrations
                     b.HasIndex("LastName", "FirstName");
 
                     b.ToTable("Patients");
+                });
+
+            modelBuilder.Entity("Disci.Domain.PatientLegacyNumber", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PatientId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("Source", "Number")
+                        .IsUnique();
+
+                    b.ToTable("PatientLegacyNumbers");
                 });
 
             modelBuilder.Entity("Disci.Domain.PatientMedicalCondition", b =>
@@ -698,6 +740,10 @@ namespace Disci.Infrastructure.Migrations
                     b.Property<int?>("LegacyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("LegacySource")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<int>("PatientId")
                         .HasColumnType("int");
 
@@ -712,11 +758,11 @@ namespace Disci.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LegacyId")
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("LegacyId", "LegacySource")
                         .IsUnique()
                         .HasFilter("[LegacyId] IS NOT NULL");
-
-                    b.HasIndex("PatientId");
 
                     b.ToTable("PatientPhotos");
                 });
@@ -813,6 +859,10 @@ namespace Disci.Infrastructure.Migrations
                     b.Property<int?>("LegacyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("LegacySource")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("LegacyStatus")
                         .HasMaxLength(5)
                         .HasColumnType("nvarchar(5)");
@@ -832,7 +882,7 @@ namespace Disci.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LegacyId")
+                    b.HasIndex("LegacyId", "LegacySource")
                         .IsUnique()
                         .HasFilter("[LegacyId] IS NOT NULL");
 
@@ -1256,6 +1306,10 @@ namespace Disci.Infrastructure.Migrations
                     b.Property<int?>("LegacyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("LegacySource")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<int?>("LegacyTbdr")
                         .HasColumnType("int");
 
@@ -1284,13 +1338,13 @@ namespace Disci.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LegacyId")
-                        .IsUnique()
-                        .HasFilter("[LegacyId] IS NOT NULL");
-
                     b.HasIndex("ProcedureId");
 
                     b.HasIndex("TreatmentSessionId");
+
+                    b.HasIndex("LegacyId", "LegacySource")
+                        .IsUnique()
+                        .HasFilter("[LegacyId] IS NOT NULL");
 
                     b.ToTable("TreatmentItems");
                 });
@@ -1318,6 +1372,10 @@ namespace Disci.Infrastructure.Migrations
                     b.Property<int?>("LegacyId")
                         .HasColumnType("int");
 
+                    b.Property<string>("LegacySource")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("LegacyStatus")
                         .HasMaxLength(5)
                         .HasColumnType("nvarchar(5)");
@@ -1336,7 +1394,7 @@ namespace Disci.Infrastructure.Migrations
 
                     b.HasIndex("DentistId");
 
-                    b.HasIndex("LegacyId")
+                    b.HasIndex("LegacyId", "LegacySource")
                         .IsUnique()
                         .HasFilter("[LegacyId] IS NOT NULL");
 
@@ -1733,6 +1791,17 @@ namespace Disci.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Disci.Domain.PatientLegacyNumber", b =>
+                {
+                    b.HasOne("Disci.Domain.Patient", "Patient")
+                        .WithMany("LegacyNumbers")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Patient");
+                });
+
             modelBuilder.Entity("Disci.Domain.PatientMedicalCondition", b =>
                 {
                     b.HasOne("Disci.Domain.MedicalCondition", "MedicalCondition")
@@ -2041,6 +2110,8 @@ namespace Disci.Infrastructure.Migrations
             modelBuilder.Entity("Disci.Domain.Patient", b =>
                 {
                     b.Navigation("Anamnesis");
+
+                    b.Navigation("LegacyNumbers");
 
                     b.Navigation("MedicalConditions");
 

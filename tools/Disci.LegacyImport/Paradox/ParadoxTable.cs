@@ -211,6 +211,7 @@ public sealed class ParadoxTable
 public sealed class ParadoxRecord(ParadoxTable table, object?[] values)
 {
     public object? this[string field] => values[IndexOf(field)];
+    public bool Has(string field) => table.Fields.Any(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase));
 
     public string? Str(string field) => this[field] as string;
     public int? Int(string field) => this[field] is int i ? i : null;

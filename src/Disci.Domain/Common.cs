@@ -13,6 +13,21 @@ public interface ILegacyRecord
     int? LegacyId { get; set; }
 }
 
+/// <summary>
+/// Records that can come from more than one old database. The old key (LegacyId) is unique per source:
+/// null = DentaLineSuit, otherwise a <see cref="LegacySources"/> value.
+/// </summary>
+public interface ILegacySourceRecord : ILegacyRecord
+{
+    string? LegacySource { get; set; }
+}
+
+public static class LegacySources
+{
+    /// <summary>DentaLine 2001 (2.3), used in parallel from 2020 with its own numbering.</summary>
+    public const string Dl2001 = "DL2001";
+}
+
 public static class Currencies
 {
     public const string Try = "TRY";

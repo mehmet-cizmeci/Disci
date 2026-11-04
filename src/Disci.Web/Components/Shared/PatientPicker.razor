@@ -29,7 +29,7 @@ else
                         <span class="avatar avatar-sm">@Display.Initials(r.Name)</span>
                         <span class="flex-grow-1 min-w-0">
                             <span class="d-block fw-650 text-truncate">@r.Name</span>
-                            <span class="d-block small text-secondary">@r.Phone @(r.LegacyId is null ? "" : $"· #{r.LegacyId}")</span>
+                            <span class="d-block small text-secondary">@r.Phone @(r.LegacyId is null ? "" : $"· #{r.LegacyId}") @(r.Dl2001Protocol is null ? "" : $"· DL2001 #{r.Dl2001Protocol}")</span>
                         </span>
                     </button>
                 }
@@ -47,7 +47,7 @@ else
     private int focus;
     private CancellationTokenSource? cts;
 
-    public sealed record PatientOption(int Id, string Name, string? Phone, int? LegacyId);
+    public sealed record PatientOption(int Id, string Name, string? Phone, int? LegacyId, int? Dl2001Protocol = null);
 
     private async Task Search()
     {
@@ -67,7 +67,7 @@ else
             results = await PatientSearch.Apply(db.Patients.AsNoTracking().Where(p => !p.IsArchived), t)
                 .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
                 .Take(8)
-                .Select(p => new PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId))
+                .Select(p => new PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId, p.Dl2001Protocol))
                 .ToListAsync(token);
             focus = 0;
         }

@@ -8,6 +8,13 @@ public static class Display
 {
     private static readonly CultureInfo Tr = new("tr-TR");
 
+    /// <summary>
+    /// Patient number as staff know it: the DentaLineSuit protocol (or the Disci id), plus the DentaLine 2001 protocol
+    /// when the patient also had a card there (that program numbered from 1 again).
+    /// </summary>
+    public static string Protocol(int id, int? legacyId, int? dl2001Protocol) =>
+        $"#{legacyId ?? id}" + (dl2001Protocol is { } d ? $" · DL2001 #{d}" : "");
+
     public static string Money(decimal amount, string currency = Currencies.Try) => currency switch
     {
         Currencies.Try => amount.ToString("N2", Tr) + " ₺",

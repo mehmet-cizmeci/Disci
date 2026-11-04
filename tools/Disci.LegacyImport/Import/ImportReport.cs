@@ -15,14 +15,21 @@ public sealed class ImportReport
     public void Target(string name, int count) => _targets.Add((name, count));
     public void Total(string name, decimal value) => _totals.Add((name, value));
     public void Warn(string message) => _warnings.Add(message);
+    /// <summary>A list printed after the warnings (may hold patient names: the report stays in the local data folder).</summary>
+    public void Section(string title, IEnumerable<string> lines) => _sections.Add((title, lines.ToList()));
+
+    private readonly List<(string Title, List<string> Lines)> _sections = [];
 
     /// <summary>True when every source table returned as many records as its header announces.</summary>
     public bool SourcesComplete => _sources.Values.All(s => s.Read == s.Header);
 
-    public string ToMarkdown(string sourceDir, string connection, TimeSpan elapsed)
+    public IEnumerable<string> TargetLines => _targets.Select(t => $"{t.Name}: {t.Count.ToString("N0", Tr)}")
+        .Concat(_totals.Select(t => $"{t.Name}: {t.Value.ToString("N2", Tr)}"));
+
+    public string ToMarkdown(string sourceDir, string connection, TimeSpan elapsed, string title = "DentaLineSuit → Disci aktarım raporu")
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# DentaLineSuit → Disci aktarım raporu").AppendLine();
+        sb.AppendLine($"# {title}").AppendLine();
         sb.AppendLine($"- Tarih: {DateTime.Now:yyyy-MM-dd HH:mm}");
         sb.AppendLine($"- Kaynak: `{sourceDir}`");
         sb.AppendLine($"- Hedef: `{connection}`");
@@ -46,6 +53,13 @@ public sealed class ImportReport
         sb.AppendLine().AppendLine($"## Uyarılar ({_warnings.Count})").AppendLine();
         foreach (var w in _warnings)
             sb.AppendLine($"- {w}");
+
+        foreach (var (sectionTitle, lines) in _sections)
+        {
+            sb.AppendLine().AppendLine($"## {sectionTitle} ({lines.Count})").AppendLine();
+            foreach (var line in lines)
+                sb.AppendLine($"- {line}");
+        }
         return sb.ToString();
     }
 }

@@ -36,6 +36,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
     public DbSet<ToothNote> ToothNotes => Set<ToothNote>();
     public DbSet<PatientPhoto> PatientPhotos => Set<PatientPhoto>();
     public DbSet<PatientNote> PatientNotes => Set<PatientNote>();
+    public DbSet<PatientLegacyNumber> PatientLegacyNumbers => Set<PatientLegacyNumber>();
     public DbSet<Procedure> Procedures => Set<Procedure>();
     public DbSet<PriceList> PriceLists => Set<PriceList>();
     public DbSet<PriceListItem> PriceListItems => Set<PriceListItem>();
@@ -97,6 +98,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
             e.HasIndex(x => x.MobilePhone);
             e.HasIndex(x => x.NationalId);
             LegacyIndex(e);
+            e.HasIndex(x => x.Dl2001Protocol).IsUnique().HasFilter("[Dl2001Protocol] IS NOT NULL");
         });
 
         Child<PatientRelative>(b, x => x.Patient, p => p.Relatives);
@@ -104,6 +106,12 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
         Child<ToothNote>(b, x => x.Patient, p => p.ToothNotes);
         Child<PatientPhoto>(b, x => x.Patient, p => p.Photos);
         Child<PatientNote>(b, x => x.Patient, p => p.PatientNotes);
+        Child<PatientLegacyNumber>(b, x => x.Patient, p => p.LegacyNumbers);
+        b.Entity<PatientLegacyNumber>(e =>
+        {
+            e.Property(x => x.Source).HasMaxLength(10);
+            e.HasIndex(x => new { x.Source, x.Number }).IsUnique();
+        });
 
         b.Entity<Anamnesis>(e =>
         {
@@ -125,7 +133,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
         b.Entity<PatientPhoto>(e =>
         {
             e.Property(x => x.FilePath).HasMaxLength(400);
-            LegacyIndex(e);
+            LegacySourceIndex(e);
         });
         b.Entity<PatientNote>(e =>
         {
@@ -160,14 +168,14 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
             e.Property(x => x.Notes).HasMaxLength(1000);
             e.Property(x => x.LegacyStatus).HasMaxLength(5);
             e.HasIndex(x => new { x.PatientId, x.Date });
-            LegacyIndex(e);
+            LegacySourceIndex(e);
         });
         b.Entity<TreatmentItem>(e =>
         {
             e.HasOne(x => x.TreatmentSession).WithMany(x => x.Items).HasForeignKey(x => x.TreatmentSessionId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.Currency).HasMaxLength(3);
-            LegacyIndex(e);
+            LegacySourceIndex(e);
         });
 
         b.Entity<Payment>(e =>
@@ -178,7 +186,7 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
             e.Property(x => x.LegacyStatus).HasMaxLength(5);
             e.Property(x => x.CreatedByUserId).HasMaxLength(450);
             e.HasIndex(x => new { x.PatientId, x.Date });
-            LegacyIndex(e);
+            LegacySourceIndex(e);
         });
         b.Entity<ExpenseAccount>(e =>
         {
@@ -282,6 +290,12 @@ public class DisciDbContext(DbContextOptions<DisciDbContext> options) : Identity
 
     private static void LegacyIndex<T>(EntityTypeBuilder<T> e) where T : class, ILegacyRecord =>
         e.HasIndex(x => x.LegacyId).IsUnique().HasFilter("[LegacyId] IS NOT NULL");
+
+    private static void LegacySourceIndex<T>(EntityTypeBuilder<T> e) where T : class, ILegacySourceRecord
+    {
+        e.Property(x => x.LegacySource).HasMaxLength(10);
+        e.HasIndex(x => new { x.LegacyId, x.LegacySource }).IsUnique().HasFilter("[LegacyId] IS NOT NULL");
+    }
 
     private static void Child<T>(ModelBuilder b,
         System.Linq.Expressions.Expression<Func<T, Patient?>> parent,

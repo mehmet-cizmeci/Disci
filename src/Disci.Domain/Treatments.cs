@@ -9,9 +9,10 @@ public enum TreatmentKind
 }
 
 /// <summary>One visit or chart entry for a patient (DentaLineSuit DLORALTD).</summary>
-public class TreatmentSession : Entity, ILegacyRecord
+public class TreatmentSession : Entity, ILegacySourceRecord
 {
     public int? LegacyId { get; set; }
+    public string? LegacySource { get; set; }
     public int PatientId { get; set; }
     public Patient Patient { get; set; } = null!;
     /// <summary>Null for imported records: the old system did not store who did the work.</summary>
@@ -25,9 +26,10 @@ public class TreatmentSession : Entity, ILegacyRecord
 }
 
 /// <summary>A procedure on one tooth (DentaLineSuit DLOR_DET).</summary>
-public class TreatmentItem : Entity, ILegacyRecord
+public class TreatmentItem : Entity, ILegacySourceRecord
 {
     public int? LegacyId { get; set; }
+    public string? LegacySource { get; set; }
     public int TreatmentSessionId { get; set; }
     public TreatmentSession TreatmentSession { get; set; } = null!;
     public int? ProcedureId { get; set; }

@@ -153,7 +153,7 @@
 
         if (AppointmentId is { } id && await db.Appointments.AsNoTracking().Include(a => a.Patient).Include(a => a.Dentist).FirstOrDefaultAsync(a => a.Id == id) is { } a)
         {
-            patient = a.Patient is null ? null : new(a.Patient.Id, a.Patient.FullName, a.Patient.MobilePhone, a.Patient.LegacyId);
+            patient = a.Patient is null ? null : new(a.Patient.Id, a.Patient.FullName, a.Patient.MobilePhone, a.Patient.LegacyId, a.Patient.Dl2001Protocol);
             guest = a.PatientId is null;
             guestName = a.GuestName;
             guestPhone = a.GuestPhone;

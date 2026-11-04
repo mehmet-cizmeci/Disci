@@ -81,10 +81,19 @@ veya bilgisayar adıyla bağlanın. Adres değiştiyse sertifikayı yenilemek i�
 **Geçiş günü (eski verileri yeniden aktarma):** DentaLineSuit'e son kayıt girildikten sonra, yönetici PowerShell'de:
 
 ```powershell
-C:\Disci\betikler\veri-aktar.ps1 -EskiVeri "D:\DentaLineSuit\DL2500DB"
+C:\Disci\betikler\veri-aktar.ps1 -EskiVeri "D:\DentaLineSuit\DL2500DB" -Dl2001Veri "D:\DL2001\DB"
 ```
 
-Önce yedek alınır, sonra Disci'deki veriler **ve kullanıcı hesapları** silinip baştan aktarılır.
+Önce yedek alınır, sonra Disci'deki veriler **ve kullanıcı hesapları** silinip baştan aktarılır. `-Dl2001Veri`
+verilirse DentaLine 2001'deki kayıtlar da eklenir: hastalar ad, telefon ve doğum tarihiyle eşleştirilir, iki programa
+birden girilmiş tedavi ve ödemeler bir kez yazılır. Aynı adlı ama doğum tarihi çok farklı olan hastalar ayrı bırakılır; raporda "Ayrı bırakılan" listesine bakın.
+
+DentaLine 2001 kayıtlarını, DentaLineSuit verisini silmeden sonradan eklemek (veya yeni girilenleri eklemek) için:
+
+```powershell
+C:\Disci\import\Disci.LegacyImport.exe --dl2001 "D:\DL2001\DB" --dry-run   # önce deneme, rapor yazar
+C:\Disci\import\Disci.LegacyImport.exe --dl2001 "D:\DL2001\DB" --connection "<bağlantı>" --files C:\DisciVeri\files
+```
 
 **Elle yedek:**
 

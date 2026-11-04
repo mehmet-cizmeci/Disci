@@ -37,7 +37,7 @@ else
 
             <dl class="dl-grid mb-4">
                 <dt>Hasta</dt><dd class="fw-650">@payment.Patient.FullName</dd>
-                <dt>Protokol no</dt><dd>@(payment.Patient.LegacyId ?? payment.Patient.Id)</dd>
+                <dt>Protokol no</dt><dd>@Display.Protocol(payment.Patient.Id, payment.Patient.LegacyId, payment.Patient.Dl2001Protocol)</dd>
                 <dt>Açıklama</dt><dd>@(payment.Description ?? "Diş tedavisi ödemesi")</dd>
                 <dt>Ödeme şekli</dt><dd>@Display.Name(payment.Method) @payment.BankName</dd>
                 @if (payment.DueDate is not null) { <dt>Vade</dt><dd>@Display.Date(payment.DueDate)</dd> }

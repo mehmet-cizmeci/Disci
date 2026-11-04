@@ -1,8 +1,10 @@
 ﻿# Geçiş günü için: Disci'deki verileri silip DentaLineSuit'ten baştan aktarır.
 # Önce bir yedek alır. Kullanıcı hesapları da silinir; sonunda ilk yönetici yeniden açılır.
-# Kullanım (yönetici PowerShell): .\veri-aktar.ps1 -EskiVeri "D:\DentaLineSuit\DL2500DB"
+# Kullanım (yönetici PowerShell): .\veri-aktar.ps1 -EskiVeri "D:\DentaLineSuit\DL2500DB" [-Dl2001Veri "D:\DL2001\DB"]
+# -Dl2001Veri verilirse DentaLine 2001 kayıtları da eklenir (hastalar eşleştirilir, mükerrer kayıtlar atlanır).
 param(
     [Parameter(Mandatory = $true)][string]$EskiVeri,
+    [string]$Dl2001Veri,
     [string]$Hedef = 'C:\Disci',
     [string]$VeriKlasoru = 'C:\DisciVeri',
     [int]$HttpPort = 5111
@@ -14,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 try {
     if (-not (Yonetici-Mi)) { throw 'Bu betik yönetici olarak çalıştırılmalı.' }
     if (-not (Test-Path (Join-Path $EskiVeri 'DLHASTA.DB'))) { throw "Bu klasörde DLHASTA.DB yok: $EskiVeri" }
+    if ($Dl2001Veri -and -not (Test-Path (Join-Path $Dl2001Veri 'DLHASTA.DB'))) { throw "Bu klasörde DLHASTA.DB yok: $Dl2001Veri" }
     $aktarimAraci = Join-Path $Hedef 'import\Disci.LegacyImport.exe'
     if (-not (Test-Path $aktarimAraci)) { throw "Aktarım aracı bulunamadı: $aktarimAraci" }
 
@@ -30,6 +33,11 @@ try {
     Stop-Service $Script:ServisAdi -Force
     & $aktarimAraci --source $EskiVeri --connection (Baglanti-Metni) --files (Join-Path $VeriKlasoru 'files') --reset | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Aktarım başarısız (çıkış kodu $LASTEXITCODE). Önceki veriler '$VeriKlasoru\Yedekler' içindeki son yedekte." }
+    if ($Dl2001Veri) {
+        Bilgi "DentaLine 2001 kayıtları ekleniyor: $Dl2001Veri"
+        & $aktarimAraci --dl2001 $Dl2001Veri --connection (Baglanti-Metni) --files (Join-Path $VeriKlasoru 'files') | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "DentaLine 2001 aktarımı başarısız (çıkış kodu $LASTEXITCODE). Önceki veriler '$VeriKlasoru\Yedekler' içindeki son yedekte." }
+    }
 
     Baslik '3. Yetkiler ve başlatma'
     Servis-Veritabani-Yetkisi

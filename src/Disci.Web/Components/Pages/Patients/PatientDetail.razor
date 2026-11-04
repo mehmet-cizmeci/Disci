@@ -30,7 +30,7 @@ else
                                 @if (patient.IsArchived) { <span class="chip chip-muted"><Icon Name="archive" Class="ico-sm" /> Arşivde</span> }
                             </div>
                             <div class="facts">
-                                <span>#@(patient.LegacyId ?? patient.Id)</span>
+                                <span>@Display.Protocol(patient.Id, patient.LegacyId, patient.Dl2001Protocol)</span>
                                 @if (patient.BirthDate is not null) { <span><Icon Name="cake" Class="ico-sm" /> @Display.Date(patient.BirthDate) · @Display.Age(patient.BirthDate)</span> }
                                 @if (patient.MobilePhone is not null)
                                 {

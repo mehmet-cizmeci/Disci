@@ -1,8 +1,9 @@
 namespace Disci.Domain;
 
-public class Payment : Entity, ILegacyRecord
+public class Payment : Entity, ILegacySourceRecord
 {
     public int? LegacyId { get; set; }
+    public string? LegacySource { get; set; }
     public int PatientId { get; set; }
     public Patient Patient { get; set; } = null!;
     public DateOnly Date { get; set; }

@@ -4,6 +4,8 @@ public class Patient : Entity, ILegacyRecord
 {
     /// <summary>DentaLineSuit PROTOKOL number.</summary>
     public int? LegacyId { get; set; }
+    /// <summary>PROTOKOL number in DentaLine 2001 (separate numbering; the same number can belong to another patient in DentaLineSuit).</summary>
+    public int? Dl2001Protocol { get; set; }
     public required string FirstName { get; set; }
     public string LastName { get; set; } = "";
     public string FullName => string.IsNullOrEmpty(LastName) ? FirstName : $"{FirstName} {LastName}";
@@ -53,6 +55,18 @@ public class Patient : Entity, ILegacyRecord
     public List<PatientNote> PatientNotes { get; set; } = [];
     public List<TreatmentSession> TreatmentSessions { get; set; } = [];
     public List<Payment> Payments { get; set; } = [];
+    /// <summary>Further old numbers of this patient: the same person had more than one card (e.g. twice in DentaLine 2001).</summary>
+    public List<PatientLegacyNumber> LegacyNumbers { get; set; } = [];
+}
+
+/// <summary>An additional old-system protocol number of a patient whose duplicate cards were merged on import.</summary>
+public class PatientLegacyNumber : Entity
+{
+    public int PatientId { get; set; }
+    public Patient Patient { get; set; } = null!;
+    /// <summary>A <see cref="LegacySources"/> value.</summary>
+    public required string Source { get; set; }
+    public int Number { get; set; }
 }
 
 public enum RelativeType
@@ -123,9 +137,10 @@ public enum PhotoKind
     Other = 9,
 }
 
-public class PatientPhoto : Entity, ILegacyRecord
+public class PatientPhoto : Entity, ILegacySourceRecord
 {
     public int? LegacyId { get; set; }
+    public string? LegacySource { get; set; }
     public int PatientId { get; set; }
     public Patient Patient { get; set; } = null!;
     public DateOnly TakenOn { get; set; }

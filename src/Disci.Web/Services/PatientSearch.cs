@@ -31,7 +31,7 @@ public static class PatientSearch
 
             if (!word.StartsWith('0') && word.Length <= 6 && int.TryParse(word, out var number))
             {
-                q = q.Where(p => p.LegacyId == number || p.Id == number);
+                q = q.Where(p => p.LegacyId == number || p.Id == number || p.Dl2001Protocol == number || p.LegacyNumbers.Any(n => n.Number == number));
                 continue;
             }
 

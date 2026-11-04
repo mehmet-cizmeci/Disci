@@ -15,8 +15,8 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
 {
     private static readonly CultureInfo Tr = new("tr-TR");
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-    private static readonly HashSet<string> FindingPrefixes = ["DCE", "DEN", "DPR"];
-    private static readonly Dictionary<string, string> CategoryByPrefix = new()
+    internal static readonly HashSet<string> FindingPrefixes = ["DCE", "DEN", "DPR"];
+    internal static readonly Dictionary<string, string> CategoryByPrefix = new()
     {
         ["CER"] = "Cerrahi",
         ["END"] = "Endodonti ve restoratif",
@@ -214,7 +214,7 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
         report.Target("Randevu türü", types);
     }
 
-    private static readonly HashSet<string> MappedPatientFields =
+    internal static readonly HashSet<string> MappedPatientFields =
     [
         "PROTOKOL", "ADI", "EV_TEL", "CEP_TEL", "IS_TEL", "EV_ADR_1", "EV_ADR_2", "EV_P_KOD", "EV_SEMT", "EV_SEHIR",
         "IS_ADR_1", "IS_ADR_2", "IS_P_KOD", "IS_SEMT", "IS_SEHIR", "DOGUM_TARIHI", "KAYIT_TARIHI", "CINSIYET",
@@ -233,51 +233,15 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
         foreach (var r in Rows("DLHASTA"))
         {
             int protocol = r.Int("PROTOKOL")!.Value;
-            var (first, last) = SplitName(Clean(r.Str("ADI")));
-            var p = new Patient
-            {
-                LegacyId = protocol,
-                FirstName = first,
-                LastName = last,
-                NationalId = Clean(r.Str("KIMLIK_NO")),
-                BirthDate = r.Date("DOGUM_TARIHI"),
-                BirthPlace = Clean(r.Str("DOGUM_YERI")),
-                Gender = r.Str("CINSIYET") switch { "K" => Gender.Female, "E" => Gender.Male, _ => Gender.Unknown },
-                BloodGroup = Clean(r.Str("KAN_GRUBU")),
-                Nationality = Clean(r.Str("UYRUGU")),
-                Occupation = Clean(r.Str("MESLEGI")),
-                MobilePhone = Clean(r.Str("CEP_TEL")),
-                HomePhone = Clean(r.Str("EV_TEL")),
-                WorkPhone = Clean(r.Str("IS_TEL")),
-                Email = Clean(r.Str("E_MAIL_ADRES1")),
-                SecondaryEmail = Clean(r.Str("E_MAIL_ADRES2")),
-                HomeAddress = Address(r, "EV"),
-                WorkAddress = Address(r, "IS"),
-                RegisteredOn = r.Date("KAYIT_TARIHI") ?? DateOnly.FromDateTime(DateTime.Today),
-                ReferredBy = Clean(r.Str("REFERANS_ADI")),
-                ReferrerPhone = Clean(r.Str("REFERANS_TEL")),
-                FamilyDoctor = Join(" ", Clean(r.Str("AILE_DR_ADI")), Clean(r.Str("AILE_DR_TEL"))),
-                InsuranceProvider = Clean(r.Str("SOS_GUV_SISTEMI")),
-                InsuranceNo = Clean(r.Str("SOS_GUV_NO")),
-                TaxOffice = Clean(r.Str("VERGI_DAIRESI")),
-                TaxNo = Clean(r.Str("VERGI_NO")),
-                DiscountRate = r.Dec("ISKONTO_ORANI") is > 0 and var rate ? rate : null,
-                Notes = Clean(r.Str("NOTLAR")),
-                PriceList = PriceListFor(r.Str("HASTA_GRUBU"), groupAliases),
-            };
+            var p = NewPatient(r);
+            p.LegacyId = protocol;
+            p.PriceList = PriceListFor(r.Str("HASTA_GRUBU"), groupAliases);
             if (r.Int("DIS_HEKIMI_NO") is { } dr)
             {
                 if (_dentists.TryGetValue(dr, out var dentist)) p.PrimaryDentist = dentist;
                 else report.Warn($"Hasta {protocol}: hekim no {dr} bulunamadı.");
             }
-            AddRelative(p, RelativeType.EmergencyContact, r.Str("YAKIN_ADI"), r.Str("YAKIN_TEL"), null, null);
-            AddRelative(p, RelativeType.Father, r.Str("BABA_ADI"), r.Str("BABA_TEL"), r.Str("BABA_CEP"), r.Str("BABA_MESLEK"));
-            AddRelative(p, RelativeType.Mother, r.Str("ANNE_ADI"), r.Str("ANNE_TEL"), r.Str("ANNE_CEP"), r.Str("ANNE_MESLEK"));
-
-            var extra = r.All()
-                .Where(x => x.Value is not null && !MappedPatientFields.Contains(x.Field))
-                .ToDictionary(x => x.Field, x => x.Value);
-            if (extra.Count > 0) p.LegacyExtra = JsonSerializer.Serialize(extra, JsonOptions);
+            p.LegacyExtra = PatientExtras(r);
 
             db.Patients.Add(p);
             _patients[protocol] = p;
@@ -292,21 +256,73 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
             .OfType<int>().Distinct().Where(id => !_patients.ContainsKey(id)).Order();
         foreach (int protocol in referenced)
         {
-            var p = new Patient
-            {
-                LegacyId = protocol,
-                FirstName = $"(Eski kayıt {protocol})",
-                LastName = "",
-                RegisteredOn = DateOnly.FromDateTime(DateTime.Today),
-                Notes = "Eski sistemde hasta kartı silinmiş, ancak bu numaraya bağlı kayıtlar vardı.",
-                IsArchived = true,
-            };
+            var p = PlaceholderPatient(protocol);
+            p.LegacyId = protocol;
             db.Patients.Add(p);
             _patients[protocol] = p;
             report.Warn($"Hasta kartı olmayan protokol {protocol} için arşivli yer tutucu hasta oluşturuldu.");
         }
         report.Target("Hasta", _patients.Count);
         report.Target("Hasta yakını", _patients.Values.Sum(p => p.Relatives.Count));
+    }
+
+    internal static Patient PlaceholderPatient(int protocol, string system = "Eski sistemde") => new()
+    {
+        FirstName = $"(Eski kayıt {protocol})",
+        LastName = "",
+        RegisteredOn = DateOnly.FromDateTime(DateTime.Today),
+        Notes = $"{system} hasta kartı silinmiş, ancak bu numaraya bağlı kayıtlar vardı.",
+        IsArchived = true,
+    };
+
+    /// <summary>Old fields with no column of their own, as JSON (null when there are none).</summary>
+    internal static string? PatientExtras(ParadoxRecord r, params string[] alsoKeep)
+    {
+        var extra = r.All()
+            .Where(x => x.Value is not null && (!MappedPatientFields.Contains(x.Field) || alsoKeep.Contains(x.Field)))
+            .ToDictionary(x => x.Field, x => x.Value);
+        return extra.Count > 0 ? JsonSerializer.Serialize(extra, JsonOptions) : null;
+    }
+
+    /// <summary>Maps a DLHASTA row (same layout in DentaLineSuit and DentaLine 2001); keys, price list and dentist are set by the caller.</summary>
+    internal static Patient NewPatient(ParadoxRecord r)
+    {
+        var (first, last) = SplitName(Clean(r.Str("ADI")));
+        first = TurkishNames.FixFirstName(first);
+        last = TurkishNames.FixLastName(last);
+        var p = new Patient
+        {
+            FirstName = first,
+            LastName = last,
+            NationalId = r.Has("KIMLIK_NO") ? Clean(r.Str("KIMLIK_NO")) : null,
+            BirthDate = r.Date("DOGUM_TARIHI"),
+            BirthPlace = Clean(r.Str("DOGUM_YERI")),
+            Gender = r.Str("CINSIYET") switch { "K" => Gender.Female, "E" => Gender.Male, _ => Gender.Unknown },
+            BloodGroup = Clean(r.Str("KAN_GRUBU")),
+            Nationality = Clean(r.Str("UYRUGU")),
+            Occupation = Clean(r.Str("MESLEGI")),
+            MobilePhone = Clean(r.Str("CEP_TEL")),
+            HomePhone = Clean(r.Str("EV_TEL")),
+            WorkPhone = Clean(r.Str("IS_TEL")),
+            Email = Clean(r.Str("E_MAIL_ADRES1")),
+            SecondaryEmail = Clean(r.Str("E_MAIL_ADRES2")),
+            HomeAddress = Address(r, "EV"),
+            WorkAddress = Address(r, "IS"),
+            RegisteredOn = r.Date("KAYIT_TARIHI") ?? DateOnly.FromDateTime(DateTime.Today),
+            ReferredBy = Clean(r.Str("REFERANS_ADI")),
+            ReferrerPhone = Clean(r.Str("REFERANS_TEL")),
+            FamilyDoctor = Join(" ", Clean(r.Str("AILE_DR_ADI")), Clean(r.Str("AILE_DR_TEL"))),
+            InsuranceProvider = Clean(r.Str("SOS_GUV_SISTEMI")),
+            InsuranceNo = Clean(r.Str("SOS_GUV_NO")),
+            TaxOffice = Clean(r.Str("VERGI_DAIRESI")),
+            TaxNo = Clean(r.Str("VERGI_NO")),
+            DiscountRate = r.Dec("ISKONTO_ORANI") is > 0 and var rate ? rate : null,
+            Notes = Clean(r.Str("NOTLAR")),
+        };
+        AddRelative(p, RelativeType.EmergencyContact, r.Str("YAKIN_ADI"), r.Str("YAKIN_TEL"), null, null);
+        AddRelative(p, RelativeType.Father, r.Str("BABA_ADI"), r.Str("BABA_TEL"), r.Str("BABA_CEP"), r.Str("BABA_MESLEK"));
+        AddRelative(p, RelativeType.Mother, r.Str("ANNE_ADI"), r.Str("ANNE_TEL"), r.Str("ANNE_CEP"), r.Str("ANNE_MESLEK"));
+        return p;
     }
 
     private PriceList? PriceListFor(string? group, Dictionary<string, string> aliases)
@@ -449,17 +465,9 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
     {
         foreach (var r in Rows("DLORALTD"))
         {
-            int legacy = r.Int("TEDNO")!.Value;
-            var kind = r.Int("TEDTYPE") switch { 1 => TreatmentKind.Finding, 2 => TreatmentKind.Planned, _ => TreatmentKind.Completed };
-            var s = new TreatmentSession
-            {
-                LegacyId = legacy,
-                Patient = _patients[r.Int("PROTOKOL")!.Value],
-                Date = r.Date("TEDTARIH") ?? DateOnly.MinValue,
-                Kind = kind,
-                Notes = Clean(r.Str("DETAIL")),
-                LegacyStatus = Clean(r.Str("STATE")),
-            };
+            var s = NewSession(r);
+            int legacy = s.LegacyId!.Value;
+            s.Patient = _patients[r.Int("PROTOKOL")!.Value];
             db.TreatmentSessions.Add(s);
             _sessions[legacy] = s;
         }
@@ -476,28 +484,12 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
                 continue;
             }
             var code = r.Str("KOD");
-            var price = r.Dec("TUTAR") ?? 0;
-            var vat = r.Dec("KDV") ?? 0;
-            if (vat > price && price >= 0 && vat != 0)
-            {
-                badVat.Add(r.Int("TED_DETNO") ?? 0);
-                vat = 0;
-            }
-            db.TreatmentItems.Add(new TreatmentItem
-            {
-                LegacyId = r.Int("TED_DETNO"),
-                TreatmentSession = session,
-                Procedure = code is not null ? _procedures.GetValueOrDefault(code) : null,
-                Description = Clean(r.Str("ADI")) ?? code ?? "",
-                ToothNumber = r.Int("DISNO") is > 0 and var tooth ? tooth : null,
-                SurfaceMask = r.Int("BIT") ?? 0,
-                Price = price,
-                VatAmount = vat,
-                Currency = CurrencyCode(r.Str("PRBR")),
-                LegacyTbdr = r.Int("TBDR"),
-            });
+            var item = NewItem(r, code is not null ? _procedures.GetValueOrDefault(code) : null, out bool vatWasBad);
+            if (vatWasBad) badVat.Add(r.Int("TED_DETNO") ?? 0);
+            item.TreatmentSession = session;
+            db.TreatmentItems.Add(item);
             items++;
-            total += price;
+            total += item.Price;
         }
         report.Target("Tedavi kalemi", items);
         report.Total("Tedavi kalemleri toplam tutar", total);
@@ -508,34 +500,16 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
 
     private void ImportPayments()
     {
-        var rates = Rows("DLODEDET")
-            .Where(r => r.Int("ODEME_ID") is not null)
-            .GroupBy(r => r.Int("ODEME_ID")!.Value)
-            .ToDictionary(g => g.Key, g => g.First().Dec("MU_KUR", 6) is > 0 and var k ? k : 1m);
+        var rates = ExchangeRates(Rows("DLODEDET"));
 
         int count = 0;
         var totals = new Dictionary<string, decimal>();
         foreach (var r in Rows("DLODEME"))
         {
-            int legacy = r.Int("ODEME_ID")!.Value;
-            var currency = CurrencyCode(r.Str("MON_UNIT"));
-            var amount = r.Dec("TOTAL") ?? 0;
-            db.Payments.Add(new Payment
-            {
-                LegacyId = legacy,
-                Patient = _patients[r.Int("PROTOKOL")!.Value],
-                Date = r.Date("PAYDATE") ?? DateOnly.MinValue,
-                DueDate = r.Date("DUEDATE"),
-                Method = r.Str("TYPE") switch { "N" => PaymentMethod.Cash, "K" => PaymentMethod.CreditCard, _ => PaymentMethod.Other },
-                Amount = amount,
-                Currency = currency,
-                ExchangeRate = rates.GetValueOrDefault(legacy, 1m),
-                BankName = Clean(r.Str("BANKNAME")),
-                ReceiptNo = Clean(r.Str("SLIP_CHEQUE")),
-                Description = Clean(r.Str("DETAIL")),
-                LegacyStatus = Clean(r.Str("STATE")),
-            });
-            totals[currency] = totals.GetValueOrDefault(currency) + amount;
+            var payment = NewPayment(r, rates);
+            payment.Patient = _patients[r.Int("PROTOKOL")!.Value];
+            db.Payments.Add(payment);
+            totals[payment.Currency] = totals.GetValueOrDefault(payment.Currency) + payment.Amount;
             count++;
         }
         report.Target("Ödeme", count);
@@ -647,20 +621,75 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
         report.Target("Reçete", prescriptions);
     }
 
+    internal static TreatmentSession NewSession(ParadoxRecord r) => new()
+    {
+        LegacyId = r.Int("TEDNO")!.Value,
+        Date = r.Date("TEDTARIH") ?? DateOnly.MinValue,
+        Kind = r.Int("TEDTYPE") switch { 1 => TreatmentKind.Finding, 2 => TreatmentKind.Planned, _ => TreatmentKind.Completed },
+        Notes = Clean(r.Str("DETAIL")),
+        LegacyStatus = Clean(r.Str("STATE")),
+    };
+
+    /// <summary>A DLOR_DET row. A VAT larger than the amount is corrupt old data: it becomes 0 and <paramref name="badVat"/> is set.</summary>
+    internal static TreatmentItem NewItem(ParadoxRecord r, Procedure? procedure, out bool badVat)
+    {
+        var code = r.Str("KOD");
+        var price = r.Dec("TUTAR") ?? 0;
+        var vat = r.Dec("KDV") ?? 0;
+        badVat = vat > price && price >= 0 && vat != 0;
+        return new TreatmentItem
+        {
+            LegacyId = r.Int("TED_DETNO"),
+            Procedure = procedure,
+            Description = Clean(r.Str("ADI")) ?? code ?? "",
+            ToothNumber = r.Int("DISNO") is > 0 and var tooth ? tooth : null,
+            SurfaceMask = r.Int("BIT") ?? 0,
+            Price = price,
+            VatAmount = badVat ? 0 : vat,
+            Currency = CurrencyCode(r.Str("PRBR")),
+            LegacyTbdr = r.Int("TBDR"),
+        };
+    }
+
+    /// <summary>Exchange rate per payment from DLODEDET (DentaLine 2001 has no rate column: 1).</summary>
+    internal static Dictionary<int, decimal> ExchangeRates(IEnumerable<ParadoxRecord> details) => details
+        .Where(r => r.Int("ODEME_ID") is not null)
+        .GroupBy(r => r.Int("ODEME_ID")!.Value)
+        .ToDictionary(g => g.Key, g => g.First().Has("MU_KUR") && g.First().Dec("MU_KUR", 6) is > 0 and var k ? k : 1m);
+
+    internal static Payment NewPayment(ParadoxRecord r, Dictionary<int, decimal> rates)
+    {
+        int legacy = r.Int("ODEME_ID")!.Value;
+        return new Payment
+        {
+            LegacyId = legacy,
+            Date = r.Date("PAYDATE") ?? DateOnly.MinValue,
+            DueDate = r.Date("DUEDATE"),
+            Method = r.Str("TYPE") switch { "N" => PaymentMethod.Cash, "K" => PaymentMethod.CreditCard, _ => PaymentMethod.Other },
+            Amount = r.Dec("TOTAL") ?? 0,
+            Currency = CurrencyCode(r.Str("MON_UNIT")),
+            ExchangeRate = rates.GetValueOrDefault(legacy, 1m),
+            BankName = Clean(r.Str("BANKNAME")),
+            ReceiptNo = Clean(r.Str("SLIP_CHEQUE")),
+            Description = Clean(r.Str("DETAIL")),
+            LegacyStatus = Clean(r.Str("STATE")),
+        };
+    }
+
     private static void AddRelative(Patient p, RelativeType type, string? name, string? phone, string? mobile, string? occupation)
     {
         if (Clean(name) is not { } n) return;
         p.Relatives.Add(new PatientRelative
         {
             Type = type,
-            Name = n,
+            Name = TurkishNames.FixFullName(n),
             Phone = Clean(phone),
             MobilePhone = Clean(mobile),
             Occupation = Clean(occupation),
         });
     }
 
-    private static Address Address(ParadoxRecord r, string prefix) => new()
+    internal static Address Address(ParadoxRecord r, string prefix) => new()
     {
         Line1 = Clean(r.Str($"{prefix}_ADR_1")),
         Line2 = Clean(r.Str($"{prefix}_ADR_2")),
@@ -670,14 +699,14 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
     };
 
     /// <summary>The old system stores "Ad(lar) SOYAD": the last word is the surname.</summary>
-    private static (string First, string Last) SplitName(string? fullName)
+    internal static (string First, string Last) SplitName(string? fullName)
     {
         if (fullName is null) return ("(İsimsiz)", "");
         var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 1 ? (parts[0], "") : (string.Join(' ', parts[..^1]), parts[^1]);
     }
 
-    private static string CurrencyCode(string? legacy) => Clean(legacy)?.ToUpper(Tr) switch
+    internal static string CurrencyCode(string? legacy) => Clean(legacy)?.ToUpper(Tr) switch
     {
         "USD" => Currencies.Usd,
         "EURO" or "EUR" => Currencies.Eur,
@@ -688,13 +717,13 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
     private static string? DelphiColor(int? color) =>
         color is { } c and >= 0 ? $"#{c & 0xFF:X2}{(c >> 8) & 0xFF:X2}{(c >> 16) & 0xFF:X2}" : null;
 
-    private static string? Clean(string? s)
+    internal static string? Clean(string? s)
     {
         var t = s?.Trim();
         return string.IsNullOrEmpty(t) ? null : t;
     }
 
-    private static string? Join(string separator, params string?[] parts)
+    internal static string? Join(string separator, params string?[] parts)
     {
         var present = parts.Where(p => !string.IsNullOrEmpty(p)).ToArray();
         return present.Length == 0 ? null : string.Join(separator, present);

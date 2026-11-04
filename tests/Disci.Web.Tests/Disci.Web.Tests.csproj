@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Disci.Web\Disci.Web.csproj" />
+    <ProjectReference Include="..\..\tools\Disci.LegacyImport\Disci.LegacyImport.csproj" />
   </ItemGroup>
 
 </Project>

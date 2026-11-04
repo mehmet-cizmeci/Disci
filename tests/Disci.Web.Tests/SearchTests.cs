@@ -46,6 +46,20 @@ public sealed class SearchTests(DisciWebFactory factory) : IClassFixture<DisciWe
         Assert.Equal([factory.Data.LastName], found);
     }
 
+    [Fact]
+    public async Task Dl2001_protocol_number_is_searchable()
+    {
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DisciDbContext>();
+            db.Patients.Add(new Disci.Domain.Patient { FirstName = "Eski", LastName = "İKİNCİPROGRAM", Dl2001Protocol = 98765 });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(["İKİNCİPROGRAM"], await Find("98765"));
+        Assert.Equal("#5 · DL2001 #98765", Display.Protocol(1, 5, 98765));
+        Assert.Equal("#12", Display.Protocol(12, null, null));
+    }
+
     [Theory]
     [InlineData("İMPLANT", "implant")]
     [InlineData("Ağrı kesici", "agri")]

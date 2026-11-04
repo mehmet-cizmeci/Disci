@@ -3,7 +3,7 @@
 Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kadar yapılanları, alınan kararları ve
 öğrenilen tuzakları anlatır. Bu projede çalışacak bir yapay zeka asistanı veya geliştirici önce bu dosyayı okumalı.
 
-- Son güncelleme: 2026-11-03
+- Son güncelleme: 2026-11-04
 - Hedefler ve istenen modüller: [Yapilacak.md](Yapilacak.md)
 - Kurulum ve komutlar: [README.md](README.md)
 - Son kullanıcı belgesi: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md)
@@ -114,7 +114,7 @@ klasöründeydi ve silinmiş olabilir; artık C# aktarım programı bu işi yap�
 |---|---|
 | `src/Disci.Domain` | Entity sınıfları (Common, Patients, Staff, Catalog, Treatments, Finance, Scheduling) |
 | `src/Disci.Infrastructure` | `DisciDbContext : IdentityDbContext<ApplicationUser>`, migration'lar, `Identity/ApplicationUser.cs` + `Roles` |
-| `tools/Disci.LegacyImport` | `Paradox/ParadoxTable.cs` (BDE'siz okuyucu), `Import/LegacyImporter.cs`, rapor, RTF ve anamnez yardımcıları |
+| `tools/Disci.LegacyImport` | `Paradox/ParadoxTable.cs` (BDE'siz okuyucu), `Import/LegacyImporter.cs`, `Import/Dl2001Merger.cs` + `PatientMatcher.cs` (DL2001 ekleme), rapor, RTF ve anamnez yardımcıları |
 | `src/Disci.Web` | Blazor Web App (Interactive Server), Identity sayfaları, `Services/` |
 | `tests/Disci.Web.Tests` | WebApplicationFactory entegrasyon testleri (10 test). Her çalışmada uydurma verili geçici bir LocalDB veritabanı kurup siler; gerçek veriye dokunmaz |
 
@@ -188,6 +188,55 @@ Kullanıcının bu bilgisayarı yalnızca geliştirme içindir; program başka b
 betiklerin sözdizimi, `kur.ps1 -Deneme` ve SQL işlevleri/yedek alma (LocalDB'ye karşı) denendi. **Gerçek bir hedef bilgisayarda
 tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesabı, LocalMachine sertifikası ve HTTPS uç noktası orada ilk kez çalışacak.
 
+## 4. DentaLine 2001 (2.3) kayıtları (2026-11-04)
+
+Kullanıcıya göre DentaLineSuit sorun çıkarınca hekim `C:\Yazılım\DL2001` klasöründeki DentaLine 2001 programına
+(`PRG\DentaLine2001.exe`, veri `DB\`, aynı Paradox biçimi) kayıt girmiş. **Veri bunun daha eskiye gittiğini gösteriyor:**
+DL2001 veritabanı Temmuz 2020'de boş başlatılmış ve o tarihten beri asıl program olarak kullanılmış. DentaLineSuit'e
+2020'den sonra çok az kayıt girilmiş (son yeni hasta Temmuz 2024'te). İki program bir süre birlikte kullanılmış.
+DL2001'de giriş için kullanıcı adı ve şifre gerekmedi; dosyalar doğrudan okundu.
+
+- Tablolar DentaLineSuit ile aynı. Farklar: `DLHASTA`'da `KIMLIK_NO` yok, `FOTO` var (boş); `DLODEDET`'te `MU_KUR` yok;
+  `DLDISNOT.NOT` memo değil, 255 karakterlik metin. Anamnez, hasta notu, gider, randevu ve reçete tabloları boş.
+- **Numaralar 1'den yeniden başlıyor**: DL2001 hastalarının protokol numaraları DentaLineSuit'teki numaralarla çakışıyor
+  ama aynı numaradaki hastalar başka kişiler. Tedavi ve ödeme numaraları da çakışıyor.
+- Doğum tarihi her hastada dolu, ama çoğu tahmini: 01.01.1980 varsayılanı ve "01.01.yıl" biçiminde yalnızca yıl.
+- Hasta grubu `Banka1` (236 hasta): DL2001'de bu adla bir tarife yok. Fiyat listesine bağlanmadı, `LegacyExtra`'da saklanıyor.
+- Ödeme türü `H` (2 kayıt): havale sayıldı (`BankTransfer`). Doğrulanmadı.
+
+**Aktarım** (`--dl2001`, ayrıntılar README'de): `Import/Dl2001Merger.cs`, `Import/PatientMatcher.cs`. Şema
+(migration `Dl2001Import`): `Patients.Dl2001Protocol` (tekil), tedavi seansı/kalemi, ödeme ve fotoğrafta `LegacySource`
+(boş = DentaLineSuit, `DL2001`) ve `(LegacyId, LegacySource)` tekil indeksi. DentaLineSuit aktarımındaki eşleme kodu
+`LegacyImporter` içindeki `internal static` fabrikalara (`NewPatient`, `NewSession`, `NewItem`, `NewPayment`) taşındı.
+DentaLineSuit aktarımı bu değişiklikten sonra eski raporla birebir aynı sayı ve tutarları verdi.
+
+**2026-11-04 sonucu** (geliştirme bilgisayarındaki `Disci` veritabanı; önceki yedek `data/db-yedek-20261104-dl2001-oncesi.bak`):
+Kullanıcı "hastaları otomatik birleştir" dedi. Kurallar genişletildi: aynı adlı tek hasta varsa ve doğum tarihi uyumluysa
+o da birleşiyor (ayrıntı README'de). Yedek geri yüklenip aktarım baştan yapıldı. 1.376 DL2001 hastasından 242'si birleşti
+(3'ü DL2001'e iki kez girilmiş kişiler; ek numaralar `PatientLegacyNumbers`'ta), 1.134'ü yeni açıldı. 24 hasta aynı adlı
+ama doğum tarihi çok farklı olduğu için ayrı bırakıldı (ör. 2002 doğumlu biri ile 1998'de tedavi görmüş 1944 doğumlu biri).
+2.786 seans, 7.268 tedavi kalemi, 3.369 ödeme, 180 diş notu ve 5 fotoğraf eklendi. İki programa birden girilmiş 2 tedavi
+kalemi ve 5 ödeme atlandı. Kaynak toplamı = eklenen + atlanan, kuruşu kuruşuna tuttu. İkinci çalıştırma hiçbir şey eklemiyor.
+Ayrıntılı liste (hasta adlarıyla): `data/reports/dl2001-aktarim-*.md`.
+
+**Geçiş günü:** DL2001 hâlâ kullanılıyor. `--dl2001` yeniden çalıştırılınca yalnızca **yeni** kayıtları ekler.
+DL2001'de sonradan **düzeltilen veya silinen** kayıtlar Disci'ye yansımaz. Kesin geçişte `veri-aktar.ps1 -EskiVeri ... -Dl2001Veri ...` ile ikisi birlikte baştan aktarılmalı.
+
+## 5. Adlarda Türkçe harfler (2026-11-04)
+
+Kullanıcı, adlarda Türkçe harflerin neden görünmediğini sordu. Eski iki programda da adlar Türkçe harfsiz kaydedilmiş
+(soyadlarda Ç/Ş/Ğ/Ü/Ö 6.600 hastada toplam 31 kez). DentaLine ayrıca adı Türkçe kuralla küçültmüş: yazılan "IBRAHIM"
+"Ibrahım", "ALI" "Alı" olmuş. Kullanıcı düzeltmeyi istedi.
+
+- `Import/TurkishNames.cs`: yaygın Türkçe ad ve soyadların doğru yazımı (sade hali anahtar). Sade hali iki farklı ada uyan
+  kelime (Gulsen → Gülsen/Gülşen) değiştirilmez. Listede olmayan soyadında yalnızca "-oğlu" eki düzeltilir. İçinde ç, ş,
+  ğ, ü, ö veya İ olan kelimeye dokunulmaz (elle düzeltilmiş adlar korunur). Soyadlar eskisi gibi büyük harf: "ÇELİK".
+- Aktarım (`NewPatient`, hasta yakınları) bunu kendisi uyguluyor. Mevcut veritabanı için `--isim-duzelt [--dry-run]`.
+- Sonuç: 6.362 hastadan 4.293'ünün, 632 hasta yakınının adı düzeldi. Önceki yedek `data/db-yedek-20261104-isim-oncesi.bak`.
+  İlk uygulamada belirsiz kelimeler öteki listeden düzeltiliyordu (7 hasta). Hata giderildi, yedek geri yüklenip yeniden uygulandı.
+- Rapor (eski → yeni, hasta adlarıyla) `data/reports/isim-duzeltme-*.md`. Raporun sonunda listede olmadığı için
+  değişmeyen sık kelimeler var; sözlüğü genişletmek için kullanılabilir.
+
 ## Öğrenilen tuzaklar
 
 - **PowerShell 5.1 betikleri** Türkçe karakter içeriyorsa UTF-8 **BOM'lu** kaydedilmeli; yoksa yollar (`Yazılım`) bozuluyor.
@@ -219,6 +268,9 @@ tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesab�
 - Gerçek veriyle test: `Disci`'nin `COPY_ONLY` yedeği `data/` altında `Disci_TestKopya` olarak açılır, `DisciWebFactory` benzeri geçici bir fabrika (test kimliği, tohum veri yok) bu kopyaya bağlanır; iş bitince kopya ve yedek silinir. Betikler hasta adı yazdırmaz.
 - 2026-11-03: Kullanıcının Firefox'unda hiçbir düğme/sekme çalışmıyordu (Chrome'da çalışıyordu). Neden: "WebSocketSniff" eklentisi `document_end`'de `window.WebSocket`'i eksik bir sarmalayıcıyla değiştiriyor; Blazor bağlantısı "this._webSocket.close is not a function" / "Failed to start the circuit" ile kopuyor. Önlem `App.razor`'da: `<head>`'in başında özgün `WebSocket` yakalanır (`window.__disciWebSocket`), `blazor.web.js` `autostart="false"` ile yüklenip `Blazor.start` içinde `configureSignalR: b => b.withUrl('_blazor', { WebSocket: ... })` ile bu kullanılır. Gerçek eklentiyle (geçici Firefox profiline kurularak, WebDriver BiDi ile) doğrulandı. Konsolda "Failed to start the circuit" görülürse önce tarayıcı eklentilerinden şüphelenin.
 - Visual Studio programı çalıştırırken `src/Disci.Web/bin` kilitlidir; testler `dotnet build tests/Disci.Web.Tests -o <başka klasör>` ile derlenip oradan çalıştırılabilir.
+- Kullanıcı İngilizce terimleri anlamıyor ("commit", "migration" gibi). Sorular ve özetler sade Türkçeyle, teknik terim kullanmadan yazılmalı.
+- Python'a heredoc ile Türkçe metin verilince (Windows, `py -`) karakterler bozuluyor ve metin eşleşmiyor; Türkçe içerikli dosya düzenlemelerini Edit aracıyla yapın.
+- `PatientMatcher` aday listesi olarak iç listesini döndürmemeli (kopya verin); aktarım sırasında `Add` ile liste büyüyünce rapordaki adaylar bozuluyordu.
 
 ## Açık sorular (kullanıcıya sorulacak)
 
@@ -227,6 +279,11 @@ tam kurulum henüz yapılmadı**: winget ile SQL Express kurulumu, hizmet hesab�
 3. Röntgen görüntüleri hangi bilgisayarda? Sensör yazılımı hangisi?
 4. Ortodonti muayene kısaltmalarının (AT, SG, GC vb.) anlamları
 5. Yeni sistem tek bilgisayarda mı, ağda mı, bulutta mı çalışacak?
+6. DL2001'deki `Banka1` hasta grubu ve `H` ödeme türü: kullanıcı bilmiyor (2026-11-04), "uygun şekilde yap" dedi. Karar:
+   `Banka1` hiçbir fiyat listesine/indirime bağlanmadı, `LegacyExtra`'da duruyor; `H` havale (`BankTransfer`) sayıldı.
+   Anlamı öğrenilirse yeniden değerlendirilir.
+7. DL2001 raporunda ayrı bırakılan 24 aynı adlı hasta: hekim aynı kişi olduğunu söylerse elle birleştirmek için bir **hasta birleştirme** ekranı gerekir (henüz yok).
+8. Klinik 2020'den beri DL2001'i mi kullanıyordu? DentaLineSuit'e 2020'den sonra girilen az sayıdaki kayıt kimin? DL2001'deki tek hekim, DentaLineSuit'teki hekimlerden biri mi?
 
 ## Sıradaki işler
 
