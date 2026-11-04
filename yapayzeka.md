@@ -1,4 +1,4 @@
-# Yapay zeka çalışma kaydı
+﻿# Yapay zeka çalışma kaydı
 
 Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kadar yapılanları, alınan kararları ve
 öğrenilen tuzakları anlatır. Bu projede çalışacak bir yapay zeka asistanı veya geliştirici önce bu dosyayı okumalı.
@@ -258,7 +258,11 @@ verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içind
   konsolda değil tarayıcıdaki formla açılır. Yeni betikler: `geri-yukle.ps1`, `parola-sifirla.ps1` (aktarım aracında
   `--parola-sifirla`, parola ortam değişkeniyle). `kur.ps1 -Deneme` bütün adımlarıyla geçti; gerçek Windows 11 Home'da denenmedi.
 - **Açık kaynak**: MIT `LICENSE`, README tanıtım sayfası (özellikler, ekran görüntüleri), teknik içerik `docs/Gelistirici.md`'de.
-  Depo gizli (`api.github.com` 404) ve `gh` oturumu yok: herkese açma ve Release kullanıcıda (`KURULUM-YAPILACAKLARIM.md`).
+  Depo gizli; kullanıcı "herkese açma, ben söyleyeceğim" dedi (birkaç dakika açık kalıp geri gizlendi). v1.0.0 Release verisiz paketle oluşturuldu.
+- **Yedek saati 14:00** (kullanıcı isteği; gece bilgisayar kapalı olabilir), `KUR.bat -YedekSaati` ile değişir; görev adı `Disci Gunluk Yedek`.
+- **Verili paket**: `paket-olustur.ps1 -EskiVeri ... -Dl2001Veri ...` → `dist\Disci-Kurulum-VERILI-GIZLI-*.zip`; `kur.ps1` paketteki
+  `eski-veri\` klasörünü görünce sormadan aktarır. Hekimin bütün verisi bu iki programda, ikisi artık kullanılmayacak.
+  Paketle yapılan aktarım geliştirme veritabanıyla aynı sonucu verdi (6.362 hasta, 242 birleştirme).
 
 ## Öğrenilen tuzaklar
 
@@ -319,7 +323,7 @@ verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içind
 - ~~Ağdan erişim (tablet/telefon)~~ (kurulum betiği: HTTPS, güvenlik duvarı, bağlantı paketi); gerekirse JWT'li API
 - Hesap (Account/Manage) sayfalarını Türkçeleştirmek
 - Gerçek hedef bilgisayarda (Windows 11 Home) ilk tam kurulum: henüz yapılmadı
-- GitHub: depo gizli; herkese açma ve Release (zip) kullanıcıda (`gh` oturumu yok)
+- GitHub: depo **gizli**, herkese açma zamanını kullanıcı söyleyecek (söylemeden açma). `gh` oturumu var; v1.0.0 Release'te verisiz paket.
 - Yeni bir "hesap yoksa yönlendir" kuralı, hesapsız başlayan entegrasyon testlerini bozar: bu tür kurallara ayarla kapatma ekleyin (`FirstRunSetup:Enabled`).
 - `perl -0pi -e 's|...|...|'` içinde desende `||` geçerse ayraçla çakışır ve metin dosyanın başına yazılır; Türkçe ve özel karakterli düzenlemelerde Edit aracını kullanın.
 - Blazor sayfasının adı bir `@inject` adıyla aynı olamaz (`Setup` sayfasında `SetupService Setup` → CS0542); sayfalara `...Page` adı verin.
