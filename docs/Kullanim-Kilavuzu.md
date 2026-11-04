@@ -24,7 +24,7 @@ Bilgileriniz internete çıkmaz; kliniğinizin bilgisayarında durur.
 | Kasa | Tarih aralığına göre tahsilat, tedavi, gider, ödeme şekli ve hekime göre dağılım |
 | Fiyat listeleri | Birden çok tarife, toplu yüzde güncelleme, KDV |
 | Yönetim | Klinik bilgileri, hekimler, randevu türleri, kullanıcılar ve roller |
-| Güvenlik | Kullanıcı rolleri, hatalı parolada kilit, passkey ve iki adımlı doğrulama, her gece otomatik yedek |
+| Güvenlik | Kullanıcı rolleri, hatalı parolada kilit, passkey ve iki adımlı doğrulama, her gün otomatik yedek |
 | Eski program | DentaLine (DentaLineSuit ve DentaLine 2001) verilerini aktarma |
 
 ## 1. İlk kurulum
@@ -333,7 +333,7 @@ Menünün altındaki **Hesabım**:
 
 ## 16. Yedekleme ve geri yükleme
 
-Kurulum, **her gece 23:30'da** otomatik yedek alacak şekilde ayarlanır:
+Kurulum, **her gün saat 14:00'te** otomatik yedek alacak şekilde ayarlanır (bilgisayarın açık olduğu bir saat seçildi):
 
 - Veritabanı ve hasta fotoğrafları `C:\DisciVeri\Yedekler` klasörüne yedeklenir; **son 14 gün** saklanır.
 - Bilgisayar o saatte kapalıysa yedek, açıldığında alınır.

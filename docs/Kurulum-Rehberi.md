@@ -9,7 +9,7 @@ betiği her şeyi kendisi yapar. Programın kullanımı için [Kullanım kılavu
   çalışır. Bilgisayar açılınca kendiliğinden başlar; kimsenin oturum açması gerekmez.
 - Aynı ağdaki **diğer bilgisayarlar, tablet ve telefonlar** programa tarayıcıdan bağlanır; onlara program kurulmaz.
 - Bilgiler sunucudaki **SQL Server Express** veritabanında durur (ücretsiz). İnternete çıkmaz.
-- Her gece **otomatik yedek** alınır.
+- Her gün saat 14:00'te **otomatik yedek** alınır.
 
 ## Gerekenler
 
@@ -55,7 +55,7 @@ Kurulum 5-15 dakika sürer. Betik şunları kendisi yapar:
 - Kliniğe özel güvenlik sertifikası oluşturur (HTTPS) ve güvenlik duvarında 5111 ve 5443 portlarını yalnızca özel ağa açar.
 - Masaüstüne **Disci** kısayolu koyar.
 - Diğer bilgisayarlar için **bağlantı paketi** hazırlar.
-- Her gece 23:30'da çalışan **otomatik yedek** görevini kurar.
+- Her gün 14:00'te çalışan **otomatik yedek** görevini kurar (`KUR.bat -YedekSaati 12:30` ile başka saat seçilebilir).
 
 ## 3. İlk kurulum formu
 
@@ -99,7 +99,7 @@ verin. Bilgisayar adıyla kurulan kısayollar bundan etkilenmez.
 
 ## 5. Yedekleme
 
-- Otomatik yedek: her gece 23:30, `C:\DisciVeri\Yedekler`, son 14 gün saklanır. Kayıt: `C:\DisciVeri\Yedekler\yedek.log`.
+- Otomatik yedek: her gün 14:00, `C:\DisciVeri\Yedekler`, son 14 gün saklanır. Kayıt: `C:\DisciVeri\Yedekler\yedek.log`.
 - Elle yedek: yönetici PowerShell'de `C:\Disci\betikler\yedekle.ps1`.
 - **Başka bir yere kopyalayın:** haftada bir `C:\DisciVeri\Yedekler` klasörünü harici diske kopyalayın veya
   bu klasörü OneDrive / Google Drive ile eşitleyin. Bilgisayar bozulursa veya çalınırsa yalnızca dışarıdaki yedek kurtarır.

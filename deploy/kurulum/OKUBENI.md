@@ -20,7 +20,7 @@ KUR.bat -YeniSertifika                                                  güvenli
 
 | Betik | Ne yapar |
 |---|---|
-| `yedekle.ps1` | Elle yedek alır (otomatik yedek her gece 23:30) |
+| `yedekle.ps1` | Elle yedek alır (otomatik yedek her gün 14:00) |
 | `geri-yukle.ps1` | Bir yedeğe döner (önce şu anki hali yedekler) |
 | `parola-sifirla.ps1` | Unutulan yönetici parolasını sıfırlar |
 | `veri-aktar.ps1` | Geçiş günü: eski programdan verileri baştan aktarır (Disci'deki veriler silinir) |
@@ -34,7 +34,7 @@ KUR.bat -YeniSertifika                                                  güvenli
 | `C:\Disci\import` | Eski programdan aktarma aracı |
 | `C:\Disci\betikler` | Yukarıdaki betikler |
 | `C:\DisciVeri\files` | Hasta fotoğrafları |
-| `C:\DisciVeri\Yedekler` | Gece yedekleri (haftada bir harici diske de kopyalayın) |
+| `C:\DisciVeri\Yedekler` | Günlük yedekler (haftada bir harici diske de kopyalayın) |
 | `C:\DisciVeri\Disci-Baglanti` | Diğer bilgisayarlar için bağlantı paketi |
 | `C:\DisciVeri\sertifika` | Tablet ve telefonlara kurulacak sertifika (`Disci.cer`) |
 | `C:\DisciVeri\reports` | Veri aktarım raporları |

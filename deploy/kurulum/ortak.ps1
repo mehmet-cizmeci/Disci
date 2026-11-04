@@ -4,6 +4,7 @@ $Script:ServisAdi = 'Disci'
 $Script:ServisHesabi = 'NT SERVICE\Disci'
 $Script:SqlOrnek = '.\SQLEXPRESS'
 $Script:VeritabaniAdi = 'Disci'
+$Script:YedekGorevi = 'Disci Gunluk Yedek'
 
 function Baslik([string]$metin) { Write-Host ''; Write-Host "== $metin" -ForegroundColor Cyan }
 function Bilgi([string]$metin) { Write-Host "   $metin" }

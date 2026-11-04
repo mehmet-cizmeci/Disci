@@ -17,7 +17,7 @@ if (Get-Service $Script:ServisAdi -ErrorAction SilentlyContinue) {
 }
 Get-NetFirewallRule -DisplayName 'Disci *' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 Tamam 'Güvenlik duvarı kuralları kaldırıldı.'
-Unregister-ScheduledTask -TaskName 'Disci Gece Yedegi' -Confirm:$false -ErrorAction SilentlyContinue
+foreach ($gorev in $Script:YedekGorevi, 'Disci Gece Yedegi') { Unregister-ScheduledTask -TaskName $gorev -Confirm:$false -ErrorAction SilentlyContinue }
 Tamam 'Yedek görevi kaldırıldı.'
 
 Write-Host ''

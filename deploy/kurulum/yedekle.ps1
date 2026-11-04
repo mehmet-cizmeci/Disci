@@ -1,5 +1,5 @@
 ﻿# Disci yedeği: veritabanının tam yedeğini ve fotoğrafların kopyasını alır, eski yedekleri siler.
-# Kurulum bunu her gece SYSTEM hesabıyla çalışan "Disci Gece Yedegi" görevine bağlar; elle de çalıştırılabilir.
+# Kurulum bunu her gün (varsayılan 14:00) SYSTEM hesabıyla çalışan "Disci Gunluk Yedek" görevine bağlar; elle de çalıştırılabilir.
 param(
     [string]$YedekKlasoru = 'C:\DisciVeri\Yedekler',
     [string]$DosyaKlasoru = 'C:\DisciVeri\files',
@@ -19,7 +19,7 @@ function Kaydet([string]$metin) {
 try {
     New-Item -ItemType Directory -Force -Path $YedekKlasoru | Out-Null
     $dosya = Join-Path $YedekKlasoru "Disci_$(Get-Date -Format 'yyyyMMdd_HHmm').bak"
-    Sql-Calistir "BACKUP DATABASE [$($Script:VeritabaniAdi)] TO DISK = N'$dosya' WITH INIT, CHECKSUM, NAME = N'Disci gece yedeği'"
+    Sql-Calistir "BACKUP DATABASE [$($Script:VeritabaniAdi)] TO DISK = N'$dosya' WITH INIT, CHECKSUM, NAME = N'Disci yedeği'"
     Kaydet "Veritabanı yedeklendi: $dosya ($([math]::Round((Get-Item $dosya).Length / 1MB, 1)) MB)"
 
     if (Test-Path $DosyaKlasoru) {

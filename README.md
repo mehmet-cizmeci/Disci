@@ -47,11 +47,11 @@ abonelik ya da internet bağlantısı gerekmez; **hasta bilgileri kliniğinizin 
 - **Çoklu hekim**, roller: Yönetici, Hekim, Asistan (asistan randevu ve kayıt girer, finans ve ayarları göremez)
 - Hatalı parolada hesap kilidi, passkey (parmak izi/yüz/PIN) ve iki adımlı doğrulama
 - Klinik ağında **HTTPS** (kliniğe özel sertifika), güvenlik duvarı yalnızca özel ağa açılır
-- **Her gece otomatik yedek**, tek komutla geri yükleme, unutulan yönetici parolası için sıfırlama betiği
+- **Her gün otomatik yedek** (varsayılan 14:00, bilgisayar açıkken), tek komutla geri yükleme, unutulan yönetici parolası için sıfırlama betiği
 - Program içinde ayrıntılı **Türkçe kullanım kılavuzu** ve PDF'i
 
 **Kurulum ve geçiş**
-- Tek dosyayla **otomatik kurulum** (Windows 10/11, Home dahil): SQL Server Express, Windows hizmeti, sertifika, güvenlik duvarı, masaüstü kısayolu, gece yedeği
+- Tek dosyayla **otomatik kurulum** (Windows 10/11, Home dahil): SQL Server Express, Windows hizmeti, sertifika, güvenlik duvarı, masaüstü kısayolu, günlük yedek
 - **İlk kurulum formu:** klinik bilgileri ve yönetici hesabı tarayıcıdan girilir
 - Diğer bilgisayarlar için tek tıkla **bağlantı paketi**
 - **DentaLine** (DentaLineSuit 2.5 ve DentaLine 2001) verilerini aktarma: hastalar, tedaviler, ödemeler, anamnez, notlar, fotoğraflar; iki programdaki aynı hastaları birleştirme, adlardaki Türkçe harfleri düzeltme

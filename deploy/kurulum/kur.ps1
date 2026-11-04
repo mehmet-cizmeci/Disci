@@ -7,6 +7,7 @@ param(
     [string]$Dl2001Veri = '',
     [int]$HttpPort = 5111,
     [int]$HttpsPort = 5443,
+    [string]$YedekSaati = '14:00',
     [switch]$YeniSertifika,
     [switch]$Deneme
 )
@@ -52,6 +53,14 @@ try {
     # SQL Server bu aşamada henüz kurulu olmayabilir: o zaman ilk kurulum sayılır.
     $kullaniciVar = $false
     if (-not $Deneme) { try { $kullaniciVar = (Kullanici-Sayisi) -gt 0 } catch { $kullaniciVar = $false } }
+    # Kliniğe özel paket (paket-olustur.ps1 -EskiVeri ...) eski verileri eski-veri klasöründe taşır: sormadan aktarılır.
+    $paketVerisi = Join-Path $Paket 'eski-veri'
+    if (-not $EskiVeri -and (Test-Path (Join-Path $paketVerisi 'DentaLineSuit\DLHASTA.DB'))) {
+        $EskiVeri = Join-Path $paketVerisi 'DentaLineSuit'
+        if (-not $Dl2001Veri -and (Test-Path (Join-Path $paketVerisi 'DentaLine2001\DLHASTA.DB'))) { $Dl2001Veri = Join-Path $paketVerisi 'DentaLine2001' }
+        Bilgi "Pakette eski DentaLine verileri var; kurulumda aktarılacak$(if ($Dl2001Veri) { ' (DentaLineSuit + DentaLine 2001)' })."
+        if ($kullaniciVar) { Bilgi 'Disci zaten kurulu ve kullanılıyor; veriler yeniden aktarılmayacak (yalnızca program güncellenir).' }
+    }
     if (-not $EskiVeri -and -not $Deneme -and -not $kullaniciVar -and (Evet-Mi 'Eski DentaLineSuit verileri bu kurulumda aktarılsın mı? (Eski program kullanmadıysanız hayır deyin)' $false)) {
         $EskiVeri = (Read-Host '   DL2500DB klasörünün yolu (ör. D:\DentaLineSuit\DL2500DB)').Trim('" ')
         if (-not (Test-Path (Join-Path $EskiVeri 'DLHASTA.DB'))) { throw "Bu klasörde DLHASTA.DB yok: $EskiVeri" }
@@ -272,20 +281,22 @@ try {
     }
 
     # ------------------------------------------------------------------
-    Baslik '11. Gece yedeği'
-    Yap "Her gece 23:30'da veritabanı ve fotoğraflar $yedekler klasörüne yedeklenecek (son 14 gün saklanır)" {
+    Baslik '11. Günlük yedek'
+    Yap "Her gün $YedekSaati'te veritabanı ve fotoğraflar $yedekler klasörüne yedeklenecek (son 14 gün saklanır; bilgisayar o saatte kapalıysa açılınca alınır)" {
+        # Eski sürümlerin gece görevi varsa yerine bu geçer.
+        Unregister-ScheduledTask -TaskName 'Disci Gece Yedegi' -Confirm:$false -ErrorAction SilentlyContinue
         $islem = New-ScheduledTaskAction -Execute 'powershell.exe' `
             -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$betikler\yedekle.ps1`" -YedekKlasoru `"$yedekler`" -DosyaKlasoru `"$dosyalar`""
-        $tetik = New-ScheduledTaskTrigger -Daily -At '23:30'
+        $tetik = New-ScheduledTaskTrigger -Daily -At $YedekSaati
         $hesap = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
         $ayar = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2)
-        Register-ScheduledTask -TaskName 'Disci Gece Yedegi' -Action $islem -Trigger $tetik -Principal $hesap -Settings $ayar -Force | Out-Null
+        Register-ScheduledTask -TaskName $Script:YedekGorevi -Action $islem -Trigger $tetik -Principal $hesap -Settings $ayar -Force | Out-Null
     }
     if (-not $Deneme -and (Evet-Mi 'Yedeklemenin çalıştığını görmek için şimdi bir deneme yedeği alınsın mı?' $true)) {
         $once = @(Get-ChildItem $yedekler -Filter *.bak -ErrorAction SilentlyContinue).Count
-        Start-ScheduledTask -TaskName 'Disci Gece Yedegi'
+        Start-ScheduledTask -TaskName $Script:YedekGorevi
         $bitis = (Get-Date).AddMinutes(5)
-        do { Start-Sleep -Seconds 5 } while ((Get-ScheduledTask -TaskName 'Disci Gece Yedegi').State -eq 'Running' -and (Get-Date) -lt $bitis)
+        do { Start-Sleep -Seconds 5 } while ((Get-ScheduledTask -TaskName $Script:YedekGorevi).State -eq 'Running' -and (Get-Date) -lt $bitis)
         if (@(Get-ChildItem $yedekler -Filter *.bak -ErrorAction SilentlyContinue).Count -gt $once) { Tamam 'Deneme yedeği alındı.' }
         else { Uyari "Deneme yedeği oluşmadı. Ayrıntı: $yedekler\yedek.log" }
     }
@@ -308,7 +319,10 @@ try {
     Bilgi 'Diğer bilgisayarlarda bir kez şunu çalıştırın (kısayol ve sertifika kurar):'
     Bilgi "   \\$bilgisayar\Disci-Baglanti\Baglanti-Kur.bat   (paylaşım yoksa $baglantiKlasoru klasörünü USB ile götürün)"
     Bilgi "Tablet ve telefonlar için sertifika: $sertifikaKlasoru\Disci.cer (ayrıntı: OKUBENI.md)"
-    Bilgi "Yedekler : $yedekler (her gece 23:30; haftada bir harici diske de kopyalayın)"
+    Bilgi "Yedekler : $yedekler (her gün $YedekSaati; haftada bir harici diske de kopyalayın)"
+    if ($EskiVeri -and $EskiVeri.StartsWith($Paket, [StringComparison]::OrdinalIgnoreCase)) {
+        Uyari "Kurulum paketinde hasta verisi var ($Paket\eski-veri). Aktarım bitti; paketi ve USB bellekteki kopyasını silin."
+    }
     Bilgi "Kayıt    : $(Join-Path $logKlasoru "kurulum_log_$zaman.txt")"
     if ($Deneme) {
         Bilgi 'Deneme modu bitti; hiçbir değişiklik yapılmadı.'
