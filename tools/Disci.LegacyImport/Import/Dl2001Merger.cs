@@ -68,10 +68,18 @@ public sealed class Dl2001Merger(DisciDbContext db, Dl2001Options options, Impor
             if (path is null) return [];
             _tables[name] = table = new ParadoxTable(path);
         }
-        var rows = table.ReadRecords().ToList();
-        report.Source(name, rows.Count, table.HeaderRecordCount);
+        var all = table.ReadRecords().ToList();
+        var rows = _sync is null ? all : all.Where(r => !_sync.IsCopy(name, r)).ToList();
+        int copies = all.Count - rows.Count;
+        report.Source(name, rows.Count, table.HeaderRecordCount - copies);
+        if (copies > 0 && _syncReported.Add(name))
+            report.Warn($"{name}: DentaLineSuit'ten eşitlemeyle kopyalanmış {copies} kayıt atlandı (asılları DentaLineSuit aktarımıyla geldi).");
         return rows;
     }
+
+    /// <summary>Set when this DL2001 folder was filled with DentaLineSuit records (Disci.LegacySync).</summary>
+    private readonly SyncMap? _sync = SyncMap.Load(options.SourceDir) is { Source: SyncMap.FromDentaLineSuit } m ? m : null;
+    private readonly HashSet<string> _syncReported = new(StringComparer.OrdinalIgnoreCase);
 
     // ---------------------------------------------------------------- price lists
 
@@ -142,6 +150,16 @@ public sealed class Dl2001Merger(DisciDbContext db, Dl2001Options options, Impor
         foreach (var n in await db.PatientLegacyNumbers.Where(n => n.Source == Source).ToListAsync(ct))
             _patientIds[n.Number] = n.PatientId;
         var legacyNo = existing.ToDictionary(p => p.Id, p => p.LegacyId);
+
+        // Cards copied from DentaLineSuit (or matched with one) by the sync belong to that DentaLineSuit patient.
+        if (_sync is not null)
+        {
+            var byLegacy = existing.Where(p => p.LegacyId is not null).ToDictionary(p => p.LegacyId!.Value, p => p.Id);
+            int linked = 0;
+            foreach (var (d01, dls) in _sync.CopiedPatients.Concat(_sync.MatchedPatients))
+                if (!_patientIds.ContainsKey(d01) && byLegacy.TryGetValue(dls[0], out var id)) { _patientIds[d01] = id; linked++; }
+            if (linked > 0) report.Target("Hasta: eşitleme dosyasıyla DentaLineSuit hastasına bağlanan", linked);
+        }
 
         var matcher = new PatientMatcher(existing.Select(p => new PatientKey(p.Id, p.FirstName + " " + p.LastName,
             PatientMatcher.PhoneKeys(p.MobilePhone, p.HomePhone, p.WorkPhone), p.BirthDate)));

@@ -3,7 +3,7 @@
 Bu dosya, DentaLineSuit'ten yeni **Disci** sistemine geçiş için şimdiye kadar yapılanları, alınan kararları ve
 öğrenilen tuzakları anlatır. Bu projede çalışacak bir yapay zeka asistanı veya geliştirici önce bu dosyayı okumalı.
 
-- Son güncelleme: 2026-11-04
+- Son güncelleme: 2026-11-05
 - Hedefler ve istenen modüller: [Yapilacak.md](Yapilacak.md)
 - Tanıtım (GitHub sayfası): [README.md](README.md); komutlar ve proje yapısı: [docs/Gelistirici.md](docs/Gelistirici.md)
 - Kurulum: [docs/Kurulum-Rehberi.md](docs/Kurulum-Rehberi.md); son kullanıcı: [docs/Kullanim-Kilavuzu.md](docs/Kullanim-Kilavuzu.md) (+ PDF)
@@ -115,7 +115,8 @@ klasöründeydi ve silinmiş olabilir; artık C# aktarım programı bu işi yap�
 |---|---|
 | `src/Disci.Domain` | Entity sınıfları (Common, Patients, Staff, Catalog, Treatments, Finance, Scheduling) |
 | `src/Disci.Infrastructure` | `DisciDbContext : IdentityDbContext<ApplicationUser>`, migration'lar, `Identity/ApplicationUser.cs` + `Roles` |
-| `tools/Disci.LegacyImport` | `Paradox/ParadoxTable.cs` (BDE'siz okuyucu), `Import/LegacyImporter.cs`, `Import/Dl2001Merger.cs` + `PatientMatcher.cs` (DL2001 ekleme), rapor, RTF ve anamnez yardımcıları |
+| `tools/Disci.LegacyImport` | `Paradox/ParadoxTable.cs` (BDE'siz okuyucu), `Import/LegacyImporter.cs`, `Import/Dl2001Merger.cs` + `PatientMatcher.cs` (DL2001 ekleme), `Import/SyncMap.cs` (eşitleme dosyası), rapor, RTF ve anamnez yardımcıları |
+| `tools/Disci.LegacySync` | 32 bit; iki eski programı BDE üzerinden birbirinin kayıtlarıyla tamamlar (`Bde.cs`, `LegacySync.cs`) |
 | `src/Disci.Web` | Blazor Web App (Interactive Server), Identity sayfaları, `Services/` |
 | `tests/Disci.Web.Tests` | WebApplicationFactory entegrasyon testleri (10 test). Her çalışmada uydurma verili geçici bir LocalDB veritabanı kurup siler; gerçek veriye dokunmaz |
 
@@ -258,13 +259,45 @@ verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içind
   konsolda değil tarayıcıdaki formla açılır. Yeni betikler: `geri-yukle.ps1`, `parola-sifirla.ps1` (aktarım aracında
   `--parola-sifirla`, parola ortam değişkeniyle). `kur.ps1 -Deneme` bütün adımlarıyla geçti; gerçek Windows 11 Home'da denenmedi.
 - **Açık kaynak**: MIT `LICENSE`, README tanıtım sayfası (özellikler, ekran görüntüleri), teknik içerik `docs/Gelistirici.md`'de.
-  Depo gizli; kullanıcı "herkese açma, ben söyleyeceğim" dedi (birkaç dakika açık kalıp geri gizlendi). v1.0.0 Release verisiz paketle oluşturuldu.
+  v1.0.0 Release verisiz paketle oluşturuldu. **2026-11-05: depo herkese açık** (kullanıcı onayladı; Certum açık kaynak
+  kod imzalama sertifikası public proje istiyor). Her gönderim anında herkese açıktır: gerçek veri, rapor, bağlantı bilgisi asla girmez.
+- **Kod imzalama** (2026-11-05): `deploy/imzala.ps1` (Indirici projesiyle ortak, UTF-8 BOM'lu; değişirse öteki kopyalar da) ve
+  `docs/IMZALAMA.md`. `paket-olustur.ps1` sıkıştırmadan önce `app\Disci.Web.exe`, `import\*.exe` ve paket kökündeki `*.ps1`
+  dosyalarını tek signtool çağrısıyla imzalar; sertifika yoksa uyarıp imzasız bırakır, `-ImzaZorunlu` ile hata verir.
 - **Yedek saati 14:00** (kullanıcı isteği; gece bilgisayar kapalı olabilir), `KUR.bat -YedekSaati` ile değişir; görev adı `Disci Gunluk Yedek`.
 - **Verili paket**: `paket-olustur.ps1 -EskiVeri ... -Dl2001Veri ...` → `dist\Disci-Kurulum-VERILI-GIZLI-*.zip`; `kur.ps1` paketteki
   `eski-veri\` klasörünü görünce sormadan aktarır. Hekimin bütün verisi bu iki programda, ikisi artık kullanılmayacak.
   Paketle yapılan aktarım geliştirme veritabanıyla aynı sonucu verdi (6.362 hasta, 242 birleştirme).
 
+## 7. İki eski programı birbiriyle tamamlama (2026-11-05)
+
+Kullanıcı: "DentaLineSuit ile DL2001'deki verileri birbiriyle tamamla, iki yazılımın veritabanında da tüm kayıtlar olsun."
+Araç: `tools/Disci.LegacySync` (32 bit, BDE üzerinden yazar; kullanım `docs/Gelistirici.md`). Eşleştirme Disci
+veritabanından alındı (yeni karar verilmedi). Önceki yedekler: `DentaLineSuit\_YEDEK\DL2500DB_20261105_esitleme_oncesi`,
+`DL2001\_YEDEK\DB_20261105_esitleme_oncesi`. DL2001\DB'deki eski kilit dosyalarının adı `.eski_20261105` yapıldı.
+
+- Sonuç: DentaLineSuit 6.361 hasta kartı (1.134 yeni), DL2001 6.367 (4.991 yeni; 3 kişi DL2001'de iki kartlı). İki tarafta da
+  12.623 ödeme; tedavi kalemi 37.183 / 37.182 (kartı silinmiş hastanın 1 kalemi kopyalanmadı). 236 eşleşen hastada boş alanlar
+  dolduruldu, karşı tarafta zaten olan 2 tedavi kalemi ve 5 ödeme kopyalanmadı. Rapor: `data/reports/esitleme-*.md`.
+- DL2001'e ayrıca anamnez (96), RTF notlar (6), gider hesapları (4), giderler (474), iki hekim; 22 ilaç eklendi. DL2001'de kimlik no
+  alanı yok (1 hastanın kimlik no'su yazılamadı). Fiyat listeleri, kullanıcılar, ayarlar kopyalanmadı.
+- `DISCI-ESITLEME.json` her iki klasörde: Disci aktarımı (`LegacyImporter`, `Dl2001Merger`) kopyaları atlıyor, kartları bağlıyor.
+  Eşitlenmiş kopyalardan baştan aktarım bugünkü Disci verisiyle hasta hasta aynı çıktı (6.362 hasta, tutarlar dahil).
+- Doğrulama: `Disci.LegacySync --dogrula <klasör>` bütün tabloları BDE ile okuyup dosyadaki sayıyla karşılaştırır (ikisi de sağlam).
+  Programların arayüzü eşitlemeden sonra **açılıp denenmedi**; kullanıcıya bırakıldı.
+- Aynı gün "kullanılmayan dosyaları sil" isteği: kullanıcı yalnızca `dist\` ve bin/obj klasörlerinin silinmesini seçti. Eski
+  programlardaki `_QSQ*.DB`, `BROKENDATA*`, `TURKCEIDXDATA*`, `DB_Aktarim`, eski yedekler ve `data\` yedekleri **bilerek bırakıldı**.
+
 ## Öğrenilen tuzaklar
+
+- **BDE'ye .NET'ten erişim** (`tools/Disci.LegacySync/Bde.cs`): `idapi32.dll` 32 bit, yolu kayıt defterinde (`DLLPATH`).
+  `DbiInit` yok, `DbiInitFn(500, env)` (arayüz sürümü ondalık 500). Yapılar 1 bayt paketli, enum 4 bayt: `CURProps` alan sayısı 295,
+  kayıt tamponu boyu 299; `FLDDesc` 62 bayt ve `iFldNum` yeniden yapılandırılmış tabloda sırayı göstermez (konum kullanın).
+  Ağ kontrol dosyası (NET DIR) oturum özelliği `0x00020002`. BDE yolları OEM'e çevirip "ı"yı düşürüyor (`C:\Yazılım` →
+  `C:\YAZLM`): 8.3 kısa yol verin. Metinleri BDE çevirmez, tablonun kod sayfasında bayt verin (Delphi kendisi çeviriyordu).
+  Blob tutamaçları kayıt tamponunda: `DbiInsertRecord`'dan sonra, tampon `DbiGetRecord` ile ezilmeden `DbiFreeBlob` çağırın
+  (yoksa "Too many open BLOBs"). AutoInc alanlara yazılamaz; eklenen kaydın numarası `DbiGetRecord` ile okunur.
+- DL2001'de kod sayfası 866 görünen tablolar (DLLABOR, DLDIAGNZ, DLRNCINS, DLRECENO) yalnızca Türkçe harfsiz ASCII tutuyor.
 
 - **PowerShell 5.1 betikleri** Türkçe karakter içeriyorsa UTF-8 **BOM'lu** kaydedilmeli; yoksa yollar (`Yazılım`) bozuluyor.
 - **Identity şema sürümü** yalnızca `IdentityOptions` ile belirleniyor (`OnModelCreatingVersion*` ve `SchemaVersion` dışarıya kapalı veya etkisiz). Web dışındaki kodlar `DisciDbContext.CreateOptions(...)` kullanmalı; yoksa passkey tablosu olmayan farklı bir model oluşur. Kontrol: `dotnet ef migrations has-pending-model-changes --startup-project src/Disci.Web`.
@@ -323,7 +356,7 @@ verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içind
 - ~~Ağdan erişim (tablet/telefon)~~ (kurulum betiği: HTTPS, güvenlik duvarı, bağlantı paketi); gerekirse JWT'li API
 - Hesap (Account/Manage) sayfalarını Türkçeleştirmek
 - Gerçek hedef bilgisayarda (Windows 11 Home) ilk tam kurulum: henüz yapılmadı
-- GitHub: depo **gizli**, herkese açma zamanını kullanıcı söyleyecek (söylemeden açma). `gh` oturumu var; v1.0.0 Release'te verisiz paket.
+- GitHub: depo **herkese açık** (2026-11-05). `gh` oturumu var; v1.0.0 Release'te verisiz paket.
 - Yeni bir "hesap yoksa yönlendir" kuralı, hesapsız başlayan entegrasyon testlerini bozar: bu tür kurallara ayarla kapatma ekleyin (`FirstRunSetup:Enabled`).
 - `perl -0pi -e 's|...|...|'` içinde desende `||` geçerse ayraçla çakışır ve metin dosyanın başına yazılır; Türkçe ve özel karakterli düzenlemelerde Edit aracını kullanın.
 - Blazor sayfasının adı bir `@inject` adıyla aynı olamaz (`Setup` sayfasında `SetupService Setup` → CS0542); sayfalara `...Page` adı verin.

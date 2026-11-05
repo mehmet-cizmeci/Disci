@@ -85,11 +85,27 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
         return table;
     }
 
-    private List<ParadoxRecord> Rows(string name)
+    /// <summary>
+    /// Set when this folder was filled with DentaLine 2001 records (Disci.LegacySync). Those copies are skipped here:
+    /// the DL2001 import brings the originals, and copied/matched patient cards get their DL2001 number now.
+    /// </summary>
+    private readonly SyncMap? _sync = SyncMap.Load(options.SourceDir) is { Source: SyncMap.FromDl2001 } m ? m : null;
+    private readonly HashSet<string> _syncReported = new(StringComparer.OrdinalIgnoreCase);
+
+    private List<ParadoxRecord> Rows(string name) => Rows(name, count: true);
+
+    private List<ParadoxRecord> Rows(string name, bool count)
     {
         var table = Table(name);
-        var rows = table.ReadRecords().ToList();
-        report.Source(name, rows.Count, table.HeaderRecordCount);
+        var all = table.ReadRecords().ToList();
+        var rows = _sync is null ? all : all.Where(r => !_sync.IsCopy(name, r)).ToList();
+        int copies = all.Count - rows.Count;
+        if (count)
+        {
+            report.Source(name, rows.Count, table.HeaderRecordCount - copies);
+            if (copies > 0 && _syncReported.Add(name))
+                report.Warn($"{name}: DentaLine 2001'den eşitlemeyle kopyalanmış {copies} kayıt atlandı (asılları DL2001 aktarımıyla gelir).");
+        }
         return rows;
     }
 
@@ -242,6 +258,13 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
                 else report.Warn($"Hasta {protocol}: hekim no {dr} bulunamadı.");
             }
             p.LegacyExtra = PatientExtras(r);
+            // A card copied from (or matched with) DentaLine 2001: the DL2001 import then adds to this patient.
+            if (_sync?.OtherPatient(protocol) is { Count: > 0 } d01)
+            {
+                p.Dl2001Protocol = d01[0];
+                foreach (var extra in d01.Skip(1))
+                    p.LegacyNumbers.Add(new PatientLegacyNumber { Source = LegacySources.Dl2001, Number = extra });
+            }
 
             db.Patients.Add(p);
             _patients[protocol] = p;
@@ -252,7 +275,7 @@ public sealed class LegacyImporter(DisciDbContext db, ImportOptions options, Imp
         // Records in other tables that point at a deleted patient keep a placeholder so nothing is dropped.
         var referenced = new[] { ("DLORALTD", "PROTOKOL"), ("DLODEME", "PROTOKOL"), ("DLDISNOT", "PROTOKOL"),
                 ("DLFOTO", "PROTOKOL"), ("DLANAMNZ", "PROTOKOL"), ("DLNOTLAR", "PROTOKOL") }
-            .SelectMany(t => Table(t.Item1).ReadRecords().Select(r => r.Int(t.Item2)))
+            .SelectMany(t => Rows(t.Item1, count: false).Select(r => r.Int(t.Item2)))
             .OfType<int>().Distinct().Where(id => !_patients.ContainsKey(id)).Order();
         foreach (int protocol in referenced)
         {

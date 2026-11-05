@@ -44,6 +44,9 @@ Testleri çalıştırır, web uygulamasını ve aktarım aracını .NET gerektir
 kurulum betikleri, kurulum rehberi ve kılavuz PDF'iyle birlikte `dist\Disci-Kurulum-*.zip` yapar. Kurulumun kendisi:
 [Kurulum rehberi](Kurulum-Rehberi.md). `KUR.bat -Deneme` hiçbir şeyi değiştirmeden yapılacakları gösterir.
 
+Paketlemeden önce programlar ve kurulum betikleri kod imzalama sertifikasıyla imzalanır (`deploy\imzala.ps1`);
+sertifika yoksa uyarı verip imzasız bırakır, `-ImzaZorunlu` ile hata verir. Ayrıntı: [Kod imzalama](IMZALAMA.md).
+
 ## Kullanım kılavuzu ve ekran görüntüleri
 
 - Kılavuz tek kaynaktır: `docs/Kullanim-Kilavuzu.md`. Program `/kilavuz` adresinde gösterir (Markdig), GitHub da okur.
@@ -126,6 +129,31 @@ dotnet run --project tools/Disci.LegacyImport -- --dl2001
 - DL2001 hastasının protokol no'su `Patients.Dl2001Protocol`'de; ekranlarda "#123 · DL2001 #45" görünür ve aranabilir.
   Diğer kayıtlarda eski anahtar `LegacyId` + `LegacySource = 'DL2001'`. Komut tekrar çalıştırılırsa yalnızca yeni kayıtları ekler.
 - Fiyatlar "DentaLine 2001 tarifesi" adlı ayrı bir liste olarak eklenir (varsayılan yapılmaz).
+
+### İki eski programı birbiriyle tamamlama (`tools/Disci.LegacySync`)
+
+DentaLineSuit ile DentaLine 2001'in her birinde bütün kayıtlar olsun diye: DL2001'deki hasta, tedavi, ödeme, diş notu ve
+fotoğraflar DentaLineSuit'e; DentaLineSuit'tekiler (ayrıca anamnez, RTF hasta notları, giderler ve gider hesapları,
+hekimler) DL2001'e yazılır. İlaç ve tasnif listeleri birleştirilir. Fiyat listeleri, kullanıcılar ve program ayarları
+kopyalanmaz (aynı kodlarla farklı fiyatlar var).
+
+```
+# önce iki klasörün yedeğini alın, iki program da kapalı olsun
+dotnet run --project tools/Disci.LegacySync -- [--dls <DL2500DB>] [--dl2001 <DB>]
+dotnet run --project tools/Disci.LegacySync -- --dogrula <klasör>   # her tabloyu BDE ile okuyup sayar
+```
+
+- Yazma, programların kendi veritabanı motoruyla (BDE, `idapi32.dll`) yapılır: Paradox dizinleri (.PX, .XG0/.YG0) ve
+  AutoInc sayaçları (hasta, tedavi, ödeme no) programın beklediği gibi kalır. Bu yüzden araç **32 bit** ve BDE kurulu olmalı.
+- Hastalar yeniden eşleştirilmez: Disci veritabanındaki eşleşme (`LegacyId` ↔ `Dl2001Protocol`, `PatientLegacyNumbers`)
+  kullanılır. Disci'de karşılığı olmayan kart varsa araç durur (önce `--dl2001` ile Disci'yi güncelleyin).
+- Eşleşen hastada karşı tarafta zaten olan tedavi/ödeme (Disci aktarımıyla aynı kural) kopyalanmaz; kartın boş alanları
+  doldurulur, dolu alanlara dokunulmaz.
+- Her klasöre `DISCI-ESITLEME.json` (`Import/SyncMap.cs`) yazılır: hangi satırın karşı programdan kopya olduğu ve
+  kartların karşılıkları. Disci aktarımı bu dosyayı görünce kopyaları atlar ve kartları bağlar; böylece eşitlenmiş
+  klasörlerden `--reset` + `--dl2001` ile baştan aktarım, eşitleme öncesiyle **birebir aynı** sonucu verir (2026-11-05'te
+  hasta hasta doğrulandı). Eşitlemeden sonra programlardan birine girilen yeni kayıtlar da normal aktarılır.
+- Araç yalnızca bir kez çalışır (dosya varsa durur). Rapor yalnızca sayı içerir: `data/reports/esitleme-*.md`.
 
 ## Eski tablo → yeni tablo eşlemesi
 
