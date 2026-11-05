@@ -264,6 +264,9 @@ verisi olmadan); başka hekim indirip bir formla ayarlayabilecek; program içind
 - **Kod imzalama** (2026-11-05): `deploy/imzala.ps1` (Indirici projesiyle ortak, UTF-8 BOM'lu; değişirse öteki kopyalar da) ve
   `docs/IMZALAMA.md`. `paket-olustur.ps1` sıkıştırmadan önce `app\Disci.Web.exe`, `import\*.exe` ve paket kökündeki `*.ps1`
   dosyalarını tek signtool çağrısıyla imzalar; sertifika yoksa uyarıp imzasız bırakır, `-ImzaZorunlu` ile hata verir.
+  **Karar (2026-11-05): sertifika alınmadı, alınmayacak.** Kod imzalama sertifikası ücretli (Certum açık kaynak bile yıllık
+  ücretli); kullanıcı ücret ödemek istemiyor ("paralı ise iptal et"). Disci imzasız dağıtılır; belgeler SmartScreen
+  uyarısında "Ek bilgi → Yine de çalıştır" der. İmzalama adımı ileride sertifika edinilirse diye yerinde bırakıldı.
 - **Yedek saati 14:00** (kullanıcı isteği; gece bilgisayar kapalı olabilir), `KUR.bat -YedekSaati` ile değişir; görev adı `Disci Gunluk Yedek`.
 - **Verili paket**: `paket-olustur.ps1 -EskiVeri ... -Dl2001Veri ...` → `dist\Disci-Kurulum-VERILI-GIZLI-*.zip`; `kur.ps1` paketteki
   `eski-veri\` klasörünü görünce sormadan aktarır. Hekimin bütün verisi bu iki programda, ikisi artık kullanılmayacak.

@@ -77,7 +77,8 @@ Ayrıntılar, diğer bilgisayarları ve tabletleri bağlama, yedekleme ve eski p
 
 .NET 10, ASP.NET Core Blazor (sunucu taraflı), Entity Framework Core, SQL Server Express, ASP.NET Core Identity.
 Kaynak koddan çalıştırma, proje yapısı ve testler: [Geliştirici notları](docs/Gelistirici.md).
-Kurulum paketinin kod imzalaması: [Kod imzalama](docs/IMZALAMA.md).
+Kurulum paketi imzasızdır (kod imzalama sertifikası ücretli); Windows uyarı verirse **Ek bilgi → Yine de çalıştır**.
+Ayrıntı: [Kod imzalama](docs/IMZALAMA.md).
 
 ```
 dotnet run --project src/Disci.Web      # http://localhost:5111

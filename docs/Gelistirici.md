@@ -44,8 +44,9 @@ Testleri çalıştırır, web uygulamasını ve aktarım aracını .NET gerektir
 kurulum betikleri, kurulum rehberi ve kılavuz PDF'iyle birlikte `dist\Disci-Kurulum-*.zip` yapar. Kurulumun kendisi:
 [Kurulum rehberi](Kurulum-Rehberi.md). `KUR.bat -Deneme` hiçbir şeyi değiştirmeden yapılacakları gösterir.
 
-Paketlemeden önce programlar ve kurulum betikleri kod imzalama sertifikasıyla imzalanır (`deploy\imzala.ps1`);
-sertifika yoksa uyarı verip imzasız bırakır, `-ImzaZorunlu` ile hata verir. Ayrıntı: [Kod imzalama](IMZALAMA.md).
+Disci **imzasız** dağıtılır (kod imzalama sertifikası ücretli olduğu için alınmadı). Paketleme yine de imzalama adımını
+çalıştırır (`deploy\imzala.ps1`): sertifika yoksa uyarı verip imzasız bırakır; ileride sertifika edinilirse programlar ve
+kurulum betikleri kendiliğinden imzalanır (`-ImzaZorunlu` ile sertifika yoksa hata verir). Ayrıntı: [Kod imzalama](IMZALAMA.md).
 
 ## Kullanım kılavuzu ve ekran görüntüleri
 

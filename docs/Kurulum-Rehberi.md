@@ -34,7 +34,8 @@ betiği her şeyi kendisi yapar. Programın kullanımı için [Kullanım kılavu
 
 ## 2. Kurulumu çalıştırın
 
-1. Çıkardığınız klasördeki **KUR.bat** dosyasına çift tıklayın.
+1. Çıkardığınız klasördeki **KUR.bat** dosyasına çift tıklayın. Disci ücretsiz olduğu için kod imzalama sertifikası
+   yoktur; Windows "Windows bilgisayarınızı korudu" (SmartScreen) uyarısı gösterirse **Ek bilgi → Yine de çalıştır**'a tıklayın.
 2. Windows "Bu uygulamanın değişiklik yapmasına izin veriyor musunuz?" diye sorar: **Evet**.
 3. Mavi pencerede sorulara cevap verin (Enter'a basmak köşeli parantezdeki varsayılanı seçer):
 
@@ -168,6 +169,7 @@ Yönetici PowerShell'de `C:\Disci\betikler\kaldir.ps1`. Hizmet, güvenlik duvar�
 
 | Sorun | Çözüm |
 |---|---|
+| "Windows bilgisayarınızı korudu" uyarısı | Program imzasız olduğu için çıkar (sertifika ücretli, alınmadı): **Ek bilgi → Yine de çalıştır** |
 | "winget bulunamadı" | Microsoft Store'dan **Uygulama Yükleyicisi**'ni (App Installer) güncelleyin veya SQL Server Express'i <https://www.microsoft.com/sql-server/sql-server-downloads> adresinden "Express" seçerek varsayılan ayarlarla kurun, sonra KUR.bat'ı yeniden çalıştırın |
 | "SQL Server'a bağlanılamadı" | Kurulumu, SQL Server'ı kuran Windows hesabıyla çalıştırın |
 | Program açılmıyor | Hizmetler → **Disci Klinik Programı** → Başlat. Hata sürerse Olay Görüntüleyicisi → Windows Günlükleri → Uygulama altındaki "Disci" kayıtlarına bakın |
