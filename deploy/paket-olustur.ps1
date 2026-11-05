@@ -10,7 +10,9 @@ param(
     [string]$Cikti = (Join-Path (Split-Path $PSScriptRoot -Parent) 'dist'),
     [string]$EskiVeri = '',
     [string]$Dl2001Veri = '',
-    [switch]$TestleriAtla
+    [switch]$TestleriAtla,
+    # Kod imzalama sertifikası (docs\IMZALAMA.md) yoksa paketi imzasız bırakmak yerine hata ver.
+    [switch]$ImzaZorunlu
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +81,15 @@ if ($verili) {
         "Kopyalanma: $(Get-Date -Format 'dd.MM.yyyy HH:mm')`r`nDentaLineSuit: $EskiVeri`r`nDentaLine 2001: $Dl2001Veri`r`n"
     [IO.File]::WriteAllText((Join-Path $eski 'GIZLI-HASTA-VERISI.txt'), $not, (New-Object Text.UTF8Encoding $true))
 }
+
+# Kendi programlarımız ve kurulum betikleri imzalanır (Microsoft DLL'leri zaten imzalı). Sertifika yoksa
+# imzala.ps1 uyarıp imzasız bırakır; -ImzaZorunlu ile hata verir. Ayrıntı: docs\IMZALAMA.md
+Adim 'Kod imzalama'
+$imzalanacak = @((Join-Path $paket 'app\Disci.Web.exe'), (Join-Path $paket 'import\*.exe'), (Join-Path $paket '*.ps1'))
+$imzaArg = @{ Aciklama = 'Disci'; Adres = 'https://github.com/mehmet-cizmeci/Disci' }
+if ($ImzaZorunlu) { $imzaArg.Zorunlu = $true }
+& (Join-Path $PSScriptRoot 'imzala.ps1') @imzaArg @imzalanacak
+if ($LASTEXITCODE -ne 0) { throw "Kod imzalama başarısız (çıkış kodu $LASTEXITCODE)." }
 
 $surum = Get-Date -Format 'yyyyMMdd-HHmm'
 $zip = Join-Path $Cikti $(if ($verili) { "Disci-Kurulum-VERILI-GIZLI-$surum.zip" } else { "Disci-Kurulum-$surum.zip" })
