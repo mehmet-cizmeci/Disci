@@ -1,0 +1,91 @@
+@implements IAsyncDisposable
+@inject NotificationService Notifications
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<div class="bell">
+    <button type="button" class="btn btn-light btn-icon" title="Bildirimler" @onclick="() => open = !open">
+        <Icon Name="bell" />
+        @if (urgent.Count > 0)
+        {
+            <span class="count">@(urgent.Count > 99 ? "99+" : urgent.Count)</span>
+        }
+    </button>
+    @if (open)
+    {
+        <div class="bell-menu">
+            <div class="panel-head">
+                <h2>Bildirimler</h2>
+                <div class="actions"><a href="bildirimler" class="small" @onclick="() => open = false">Tümünü gör</a></div>
+            </div>
+            @if (urgent.Count == 0)
+            {
+                <div class="empty"><Icon Name="check-circle" /><div>Bekleyen iş yok.</div></div>
+            }
+            else
+            {
+                <div class="list">
+                    @foreach (var n in urgent.Take(12))
+                    {
+                        <a class="list-row" href="@(n.PatientId is null ? "bildirimler" : $"hastalar/{n.PatientId}")" @onclick="() => open = false">
+                            <span class="notice-dot @n.Tone.ToString().ToLowerInvariant()"></span>
+                            <span class="grow">
+                                <span class="title d-block">@n.Title</span>
+                                <span class="meta d-block">@n.Detail</span>
+                            </span>
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Notice> urgent = [];
+    private bool open;
+    private PeriodicTimer? timer;
+    private string? role;
+
+    protected override async Task OnInitializedAsync()
+    {
+        role = NotificationService.RoleFor(await Me.PrincipalAsync());
+        await Load();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+        Events.Changed += OnChanged;
+        // Lateness and waiting times change with the clock alone, so refresh once a minute too.
+        timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        _ = Tick();
+    }
+
+    private async Task Tick()
+    {
+        try
+        {
+            while (timer is not null && await timer.WaitForNextTickAsync())
+                await OnChanged();
+        }
+        catch (ObjectDisposedException) { }
+    }
+
+    private async Task Load() =>
+        urgent = (await Notifications.GetAsync(includeLowPriority: false, role, await Me.AccessAsync())).Where(NotificationService.IsUrgent).ToList();
+
+    private Task OnChanged() => InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+
+    public ValueTask DisposeAsync()
+    {
+        Events.Changed -= OnChanged;
+        timer?.Dispose();
+        timer = null;
+        return ValueTask.CompletedTask;
+    }
+}

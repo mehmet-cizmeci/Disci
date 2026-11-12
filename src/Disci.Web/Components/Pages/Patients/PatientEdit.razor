@@ -1,0 +1,447 @@
+@page "/hastalar/yeni"
+@page "/hastalar/{Id:int}/duzenle"
+@rendermode InteractiveServer
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject CurrentUser Me
+@inject NavigationManager Nav
+@inject ClinicEvents Events
+@inject IJSRuntime JS
+
+<PageTitle>@(Id is null ? "Yeni hasta" : "Hasta düzenle") - Disci</PageTitle>
+
+<div class="page-head sticky">
+    <div>
+        <h1>@(Id is null ? "Yeni hasta" : $"{m.FirstName} {m.LastName}")</h1>
+        <div class="sub">@(Id is null ? "Hasta kartını açın; zorunlu alanlar yalnızca ad ve soyad." : "Hasta bilgilerini düzenleyin")</div>
+    </div>
+    <div class="actions">
+        <a class="btn btn-light" href="@(Id is null ? "hastalar" : $"hastalar/{Id}")">Vazgeç</a>
+        <button class="btn btn-primary" disabled="@saving" @onclick="Save"><Icon Name="check" /> Kaydet</button>
+    </div>
+</div>
+
+@if (notFound)
+{
+    <div class="panel"><div class="empty">Hasta bulunamadı.</div></div>
+    return;
+}
+
+@if (error is not null)
+{
+    <div class="callout callout-danger mb-3"><Icon Name="alert" /> @error</div>
+}
+@if (duplicates.Count > 0)
+{
+    <div class="callout callout-warning mb-3">
+        <Icon Name="alert" />
+        <div>
+            <div class="fw-650">Benzer kayıt var. Aynı hasta olabilir:</div>
+            @foreach (var d in duplicates)
+            {
+                <div><a href="hastalar/@d.Id" target="_blank">@d.Name</a> · @d.Phone @(d.Archived ? "(arşivde)" : "")</div>
+            }
+            <button class="btn btn-sm btn-light mt-2" @onclick="SaveAnyway">Yine de yeni hasta olarak kaydet</button>
+        </div>
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-8 d-flex flex-column gap-4">
+        <div class="panel">
+            <div class="panel-head"><Icon Name="user" /><h2>Kimlik</h2></div>
+            <div class="panel-body row g-3">
+                <div class="col-sm-6">
+                    <label class="form-label" for="fn">Ad *</label>
+                    <input id="fn" class="form-control" @bind="m.FirstName" autofocus />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="ln">Soyad *</label>
+                    <input id="ln" class="form-control" @bind="m.LastName" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="tc">TC kimlik no</label>
+                    <input id="tc" class="form-control" inputmode="numeric" maxlength="11" @bind="m.NationalId" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="bd">Doğum tarihi</label>
+                    <input id="bd" type="date" class="form-control" @bind="m.BirthDate" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="gn">Cinsiyet</label>
+                    <select id="gn" class="form-select" @bind="m.Gender">
+                        <option value="@Gender.Unknown">Belirtilmedi</option>
+                        <option value="@Gender.Female">Kadın</option>
+                        <option value="@Gender.Male">Erkek</option>
+                    </select>
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="bp">Doğum yeri</label>
+                    <input id="bp" class="form-control" @bind="m.BirthPlace" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="oc">Meslek</label>
+                    <input id="oc" class="form-control" @bind="m.Occupation" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="bg">Kan grubu</label>
+                    <select id="bg" class="form-select" @bind="m.BloodGroup">
+                        <option value="">—</option>
+                        @foreach (var g in BloodGroups)
+                        {
+                            <option value="@g">@g</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head"><Icon Name="phone" /><h2>İletişim</h2></div>
+            <div class="panel-body row g-3">
+                <div class="col-sm-4">
+                    <label class="form-label" for="mp">Cep telefonu</label>
+                    <input id="mp" type="tel" class="form-control" placeholder="05xx xxx xx xx" @bind="m.MobilePhone" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="hp">Ev telefonu</label>
+                    <input id="hp" type="tel" class="form-control" @bind="m.HomePhone" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label" for="wp">İş telefonu</label>
+                    <input id="wp" type="tel" class="form-control" @bind="m.WorkPhone" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="em">E-posta</label>
+                    <input id="em" type="email" class="form-control" @bind="m.Email" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="ad">Adres</label>
+                    <input id="ad" class="form-control" @bind="m.AddressLine" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="ds">İlçe</label>
+                    <input id="ds" class="form-control" @bind="m.District" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="ct">İl</label>
+                    <input id="ct" class="form-control" @bind="m.City" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="rn">Acil durumda aranacak kişi</label>
+                    <input id="rn" class="form-control" @bind="m.EmergencyName" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="rp">Telefonu</label>
+                    <input id="rp" type="tel" class="form-control" @bind="m.EmergencyPhone" />
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head"><Icon Name="heart" /><h2>Sağlık uyarıları (anamnez)</h2></div>
+            <div class="panel-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label" for="da">İlaç alerjisi</label>
+                        <input id="da" class="form-control" placeholder="Örn. penisilin" @bind="m.DrugAllergies" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label" for="fa">Diğer alerjiler</label>
+                        <input id="fa" class="form-control" placeholder="Örn. lateks" @bind="m.FoodAllergies" />
+                    </div>
+                </div>
+                @if (conditions.Count > 0)
+                {
+                    <label class="form-label">Hastalıklar ve durumlar</label>
+                    @foreach (var g in conditions.GroupBy(c => c.Category))
+                    {
+                        <div class="small text-secondary mt-2 mb-1">@g.Key</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var c in g)
+                            {
+                                <button type="button" class="chip @(m.Conditions.Contains(c.Id) ? "active" : "")" @onclick="() => ToggleCondition(c.Id)">@c.Name</button>
+                            }
+                        </div>
+                    }
+                }
+                <label class="form-label mt-3" for="an">Anamnez notu</label>
+                <textarea id="an" class="form-control" rows="2" @bind="m.AnamnesisNotes"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="panel sticky-side">
+            <div class="panel-head"><Icon Name="tooth" /><h2>Klinik ve ücret</h2></div>
+            <div class="panel-body d-flex flex-column gap-3">
+                <div>
+                    <label class="form-label" for="dn">Hekimi</label>
+                    <select id="dn" class="form-select" @bind="m.DentistId">
+                        <option value="0">Ortak havuz</option>
+                        @foreach (var d in dentists)
+                        {
+                            <option value="@d.Id">@d.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="pl">Fiyat listesi (tarife)</label>
+                    <select id="pl" class="form-select" @bind="m.PriceListId">
+                        <option value="0">Varsayılan liste</option>
+                        @foreach (var p in priceLists)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="dc">Sabit indirim (%)</label>
+                    <input id="dc" type="number" min="0" max="100" step="1" class="form-control" @bind="m.DiscountRate" />
+                    <div class="form-text">Tedavi eklerken fiyatlara kendiliğinden uygulanır.</div>
+                </div>
+                <div>
+                    <label class="form-label" for="ins">Kurum / sigorta</label>
+                    <input id="ins" class="form-control" @bind="m.InsuranceProvider" />
+                </div>
+                <div>
+                    <label class="form-label" for="ref">Kim yönlendirdi</label>
+                    <input id="ref" class="form-control" @bind="m.ReferredBy" />
+                </div>
+                <div>
+                    <label class="form-label" for="nt">Not</label>
+                    <textarea id="nt" class="form-control" rows="3" @bind="m.Notes"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private static readonly string[] BloodGroups = ["0 Rh+", "0 Rh-", "A Rh+", "A Rh-", "B Rh+", "B Rh-", "AB Rh+", "AB Rh-"];
+
+    private FormModel m = new();
+    private List<Dentist> dentists = [];
+    private List<PriceList> priceLists = [];
+    private List<MedicalCondition> conditions = [];
+    private List<Duplicate> duplicates = [];
+    private bool saving, notFound, duplicatesAccepted;
+    private AccessScope access = AccessScope.Everything;
+    private string? error;
+
+    private sealed record Duplicate(int Id, string Name, string? Phone, bool Archived);
+
+    private sealed class FormModel
+    {
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string? NationalId { get; set; }
+        public DateOnly? BirthDate { get; set; }
+        public Gender Gender { get; set; }
+        public string? BirthPlace { get; set; }
+        public string? Occupation { get; set; }
+        public string? BloodGroup { get; set; }
+        public string? MobilePhone { get; set; }
+        public string? HomePhone { get; set; }
+        public string? WorkPhone { get; set; }
+        public string? Email { get; set; }
+        public string? AddressLine { get; set; }
+        public string? District { get; set; }
+        public string? City { get; set; }
+        public string? EmergencyName { get; set; }
+        public string? EmergencyPhone { get; set; }
+        public string? DrugAllergies { get; set; }
+        public string? FoodAllergies { get; set; }
+        public string? AnamnesisNotes { get; set; }
+        public HashSet<int> Conditions { get; set; } = [];
+        public int DentistId { get; set; }
+        public int PriceListId { get; set; }
+        public decimal? DiscountRate { get; set; }
+        public string? InsuranceProvider { get; set; }
+        public string? ReferredBy { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        access = await Me.AccessAsync();
+        dentists = await db.Dentists.AsNoTracking().Visible(access).Where(d => d.IsActive).OrderBy(d => d.FullName).ToListAsync();
+        priceLists = await db.PriceLists.AsNoTracking().OrderByDescending(p => p.IsDefault).ThenBy(p => p.Name).ToListAsync();
+        conditions = await db.MedicalConditions.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync();
+
+        if (Id is null) return;
+        var p = await db.Patients.AsNoTracking().Include(x => x.Anamnesis).Include(x => x.MedicalConditions).Include(x => x.Relatives)
+            .FirstOrDefaultAsync(x => x.Id == Id);
+        if (p is null || !access.CanSee(p.PrimaryDentistId))
+        {
+            notFound = true;
+            return;
+        }
+
+        var emergency = p.Relatives.FirstOrDefault(r => r.Type == RelativeType.EmergencyContact);
+        m = new FormModel
+        {
+            FirstName = p.FirstName, LastName = p.LastName, NationalId = p.NationalId, BirthDate = p.BirthDate, Gender = p.Gender,
+            BirthPlace = p.BirthPlace, Occupation = p.Occupation, BloodGroup = p.BloodGroup,
+            MobilePhone = p.MobilePhone, HomePhone = p.HomePhone, WorkPhone = p.WorkPhone, Email = p.Email,
+            AddressLine = p.HomeAddress.Line1, District = p.HomeAddress.District, City = p.HomeAddress.City,
+            EmergencyName = emergency?.Name, EmergencyPhone = emergency?.MobilePhone ?? emergency?.Phone,
+            DrugAllergies = p.Anamnesis?.DrugAllergies, FoodAllergies = p.Anamnesis?.FoodAllergies, AnamnesisNotes = p.Anamnesis?.Notes,
+            Conditions = p.MedicalConditions.Select(c => c.MedicalConditionId).ToHashSet(),
+            DentistId = p.PrimaryDentistId ?? 0, PriceListId = p.PriceListId ?? 0, DiscountRate = p.DiscountRate,
+            InsuranceProvider = p.InsuranceProvider, ReferredBy = p.ReferredBy, Notes = p.Notes,
+        };
+        // Conditions recorded in the old system may have been retired from the pick list; keep them visible.
+        var missing = m.Conditions.Except(conditions.Select(c => c.Id)).ToList();
+        if (missing.Count > 0)
+            conditions.AddRange(await db.MedicalConditions.AsNoTracking().Where(c => missing.Contains(c.Id)).ToListAsync());
+    }
+
+    private void ToggleCondition(int id)
+    {
+        if (!m.Conditions.Remove(id)) m.Conditions.Add(id);
+    }
+
+    private Task SaveAnyway()
+    {
+        duplicatesAccepted = true;
+        return Save();
+    }
+
+    private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private async Task Save()
+    {
+        try
+        {
+            await SaveCore();
+        }
+        catch (DbUpdateException)
+        {
+            // Without this the whole page would stop responding and the typed data would be lost.
+            error = "Kayıt veritabanına yazılamadı. Çok uzun bir alan olabilir; bilgileri kontrol edip tekrar deneyin.";
+        }
+        // The Save button stays in view while scrolling, the messages are at the top of the form.
+        if (error is not null || duplicates.Count > 0)
+            await JS.InvokeVoidAsync("scrollTo", 0, 0);
+    }
+
+    private async Task SaveCore()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(m.FirstName) || string.IsNullOrWhiteSpace(m.LastName))
+        {
+            error = "Ad ve soyad gerekli.";
+            return;
+        }
+        if (Clean(m.NationalId) is { } tc && (tc.Length != 11 || !tc.All(char.IsDigit)))
+        {
+            error = "TC kimlik no 11 haneli olmalı.";
+            return;
+        }
+        if (m.DiscountRate is < 0 or > 100)
+        {
+            error = "İndirim 0 ile 100 arasında olmalı.";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (Id is null && !duplicatesAccepted && await FindDuplicates(db))
+                return;
+
+            var p = Id is null
+                ? new Patient { FirstName = "", RegisteredOn = DateOnly.FromDateTime(DateTime.Today) }
+                : await db.Patients.Include(x => x.Anamnesis).Include(x => x.MedicalConditions).Include(x => x.Relatives).FirstAsync(x => x.Id == Id);
+            if (!access.CanEdit(p.PrimaryDentistId) || (m.DentistId != 0 && !access.CanSee(m.DentistId)))
+            {
+                error = "Bu hastanın kaydını değiştirme yetkiniz yok (hasta başka bir hekime ait).";
+                return;
+            }
+
+            p.FirstName = m.FirstName.Trim();
+            // Same convention as the imported records: surname in capitals.
+            p.LastName = m.LastName.Trim().ToUpper(new System.Globalization.CultureInfo("tr-TR"));
+            p.NationalId = Clean(m.NationalId);
+            p.BirthDate = m.BirthDate;
+            p.Gender = m.Gender;
+            p.BirthPlace = Clean(m.BirthPlace);
+            p.Occupation = Clean(m.Occupation);
+            p.BloodGroup = Clean(m.BloodGroup);
+            p.MobilePhone = Clean(m.MobilePhone);
+            p.HomePhone = Clean(m.HomePhone);
+            p.WorkPhone = Clean(m.WorkPhone);
+            p.Email = Clean(m.Email);
+            p.HomeAddress.Line1 = Clean(m.AddressLine);
+            p.HomeAddress.District = Clean(m.District);
+            p.HomeAddress.City = Clean(m.City);
+            p.PrimaryDentistId = m.DentistId == 0 ? null : m.DentistId;
+            p.PriceListId = m.PriceListId == 0 ? null : m.PriceListId;
+            p.DiscountRate = m.DiscountRate is null or 0 ? null : m.DiscountRate;
+            p.InsuranceProvider = Clean(m.InsuranceProvider);
+            p.ReferredBy = Clean(m.ReferredBy);
+            p.Notes = Clean(m.Notes);
+
+            var emergency = p.Relatives.FirstOrDefault(r => r.Type == RelativeType.EmergencyContact);
+            if (Clean(m.EmergencyName) is { } en)
+            {
+                emergency ??= AddRelative(p);
+                emergency.Name = en;
+                emergency.MobilePhone = Clean(m.EmergencyPhone);
+            }
+            else if (emergency is not null)
+                p.Relatives.Remove(emergency);
+
+            if (Clean(m.DrugAllergies) is not null || Clean(m.FoodAllergies) is not null || Clean(m.AnamnesisNotes) is not null || p.Anamnesis is not null)
+            {
+                p.Anamnesis ??= new Anamnesis();
+                p.Anamnesis.DrugAllergies = Clean(m.DrugAllergies);
+                p.Anamnesis.FoodAllergies = Clean(m.FoodAllergies);
+                p.Anamnesis.Notes = Clean(m.AnamnesisNotes);
+            }
+
+            p.MedicalConditions.RemoveAll(c => !m.Conditions.Contains(c.MedicalConditionId));
+            foreach (var id in m.Conditions.Where(id => p.MedicalConditions.All(c => c.MedicalConditionId != id)))
+                p.MedicalConditions.Add(new PatientMedicalCondition { MedicalConditionId = id });
+
+            if (Id is null) db.Patients.Add(p);
+            await db.SaveChangesAsync();
+            await Events.NotifyAsync();
+            Nav.NavigateTo($"hastalar/{p.Id}");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private static PatientRelative AddRelative(Patient p)
+    {
+        var r = new PatientRelative { Type = RelativeType.EmergencyContact, Name = "" };
+        p.Relatives.Add(r);
+        return r;
+    }
+
+    /// <summary>Same national id, or same name with the same mobile number, is most likely the same person.</summary>
+    private async Task<bool> FindDuplicates(DisciDbContext db)
+    {
+        var tc = Clean(m.NationalId);
+        var first = m.FirstName.Trim();
+        var last = m.LastName.Trim();
+        var phone = new string((m.MobilePhone ?? "").Where(char.IsDigit).ToArray());
+        if (phone.Length > 10) phone = phone[^10..];
+
+        duplicates = await db.Patients.AsNoTracking()
+            .Where(p => (tc != null && p.NationalId == tc)
+                        || (p.FirstName == first && p.LastName == last)
+                        || (phone.Length == 10 && p.MobilePhone!.Replace(" ", "").EndsWith(phone)))
+            .Take(5)
+            .Select(p => new Duplicate(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.IsArchived))
+            .ToListAsync();
+        return duplicates.Count > 0;
+    }
+}

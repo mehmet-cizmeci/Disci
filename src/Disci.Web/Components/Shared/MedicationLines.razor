@@ -1,0 +1,142 @@
+@* Medicine search plus editable lines, shared by the prescription and template editors. *@
+
+<label class="form-label">İlaç ekle</label>
+<div class="picker mb-3">
+    <div class="input-icon">
+        <Icon Name="search" />
+        <input class="form-control" placeholder="İlaç adı yazın; listede yoksa Enter ile serbest ekleyin" autocomplete="off"
+               @bind="term" @bind:event="oninput" @onkeydown="OnKey" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(term))
+    {
+        <div class="picker-menu">
+            @foreach (var m in Matches)
+            {
+                <button type="button" @onclick="() => Add(m)">
+                    <Icon Name="pill" Class="ico-sm" />
+                    <span class="flex-grow-1">
+                        <span class="d-block fw-650">@m.Name</span>
+                        <span class="d-block small text-secondary">@m.Dose @(m.Usage is null ? "" : $"· {m.Usage}")</span>
+                    </span>
+                    @if (PrescriptionSafety.AllergyWarnings(Allergies, m.Name).Count > 0)
+                    {
+                        <span class="chip chip-danger">Alerji!</span>
+                    }
+                </button>
+            }
+            <button type="button" @onclick="AddFree">
+                <Icon Name="plus" Class="ico-sm" />
+                <span class="flex-grow-1">"@term.Trim()" serbest olarak ekle</span>
+            </button>
+        </div>
+    }
+</div>
+
+@if (Lines.Count == 0)
+{
+    <div class="text-secondary small mb-2">Henüz ilaç eklenmedi.</div>
+}
+else
+{
+    <div class="d-flex flex-column gap-2">
+        @for (var i = 0; i < Lines.Count; i++)
+        {
+            var l = Lines[i];
+            var n = i + 1;
+            var warn = PrescriptionSafety.AllergyWarnings(Allergies, l.Name);
+            <div class="panel p-2 @(warn.Count > 0 ? "border-danger" : "")">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-lg-4 d-flex align-items-center gap-2">
+                        <span class="avatar avatar-sm">@n</span>
+                        <input class="form-control form-control-sm fw-650" @bind="l.Name" aria-label="İlaç adı" />
+                    </div>
+                    <div class="col-6 col-lg-2"><input class="form-control form-control-sm" placeholder="Doz / form" @bind="l.Dose" aria-label="Doz" /></div>
+                    <div class="col-6 col-lg-3"><input class="form-control form-control-sm" placeholder="Kullanım: 2x1, tok karnına" list="rx-usages" @bind="l.Usage" aria-label="Kullanım" /></div>
+                    <div class="col-8 col-lg-2">
+                        <div class="input-group input-group-sm">
+                            <input type="number" min="1" max="20" class="form-control" @bind="l.Quantity" aria-label="Kutu" />
+                            <span class="input-group-text">kutu</span>
+                        </div>
+                    </div>
+                    <div class="col-4 col-lg-1 text-end">
+                        <button type="button" class="btn btn-sm btn-light btn-icon" title="Çıkar" @onclick="() => Remove(l)"><Icon Name="x" Class="ico-sm" /></button>
+                    </div>
+                </div>
+                @if (warn.Count > 0)
+                {
+                    <div class="small text-danger fw-650 mt-1 ms-1"><Icon Name="alert" Class="ico-sm" /> Hastanın alerjisiyle eşleşiyor (@string.Join(", ", warn)). Hekimle teyit edin.</div>
+                }
+                @if (l.MedicationId is null)
+                {
+                    <div class="form-check small mt-1 ms-1">
+                        <input class="form-check-input" type="checkbox" id="save-@uid-@n" @bind="l.SaveToCatalog" />
+                        <label class="form-check-label" for="save-@uid-@n">Bu ilacı ilaç listesine de ekle</label>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <datalist id="rx-usages">
+        @foreach (var u in CommonUsages) { <option value="@u"></option> }
+    </datalist>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<RxLine> Lines { get; set; } = [];
+    [Parameter, EditorRequired] public List<Medication> Catalog { get; set; } = [];
+    /// <summary>The patient's drug allergy text; null for templates, which belong to no patient.</summary>
+    [Parameter] public string? Allergies { get; set; }
+    /// <summary>Raised when a line is added or removed, so the parent can re-render (e.g. enable its buttons).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static readonly string[] CommonUsages =
+    [
+        "Günde 2 kez 1 tablet, tok karnına", "Günde 3 kez 1 tablet, tok karnına", "Günde 2 kez 1 tablet (12 saatte bir)",
+        "Ağrı olduğunda 1 tablet (günde en fazla 3)", "Günde 3 kez gargara (yemeklerden sonra)", "Günde 3-4 kez yaraya sürülür",
+    ];
+
+    private string? term;
+    private readonly string uid = Guid.NewGuid().ToString("N")[..6];
+
+    private IEnumerable<Medication> Matches
+    {
+        get
+        {
+            var words = (term ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return Catalog.Where(m => words.All(w => TextSearch.Contains(m.Name, w) || TextSearch.Contains(m.Code, w))).Take(8);
+        }
+    }
+
+    private Task Add(Medication m)
+    {
+        Lines.Add(new RxLine { MedicationId = m.Id, Name = m.Name, Dose = m.Dose, Usage = m.Usage });
+        term = null;
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task AddFree()
+    {
+        if (string.IsNullOrWhiteSpace(term)) return Task.CompletedTask;
+        Lines.Add(new RxLine { Name = term.Trim() });
+        term = null;
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task Remove(RxLine l)
+    {
+        Lines.Remove(l);
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(term)) return Task.CompletedTask;
+        // Enter picks the only match, otherwise adds the typed name as a free entry.
+        var matches = Matches.ToList();
+        return matches.Count == 1 ? Add(matches[0]) : AddFree();
+    }
+
+    /// <summary>A Medication row for each typed-in line marked "add to the list"; null for the others.</summary>
+    public static Medication? NewCatalogEntry(RxLine l, string? dose, string? usage) =>
+        l.MedicationId is null && l.SaveToCatalog ? new Medication { Name = l.Name.Trim(), Dose = dose, Usage = usage } : null;
+}

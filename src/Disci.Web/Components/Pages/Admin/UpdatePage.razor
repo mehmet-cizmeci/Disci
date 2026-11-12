@@ -1,0 +1,198 @@
+@page "/guncelleme"
+@attribute [Authorize(Roles = Roles.Admin)]
+@rendermode InteractiveServer
+@inject UpdateService Updates
+@inject CurrentUser Me
+
+<PageTitle>Güncelleme - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Güncelleme</h1>
+        <div class="sub">Yeni sürümler GitHub'dan (@Updates.Repository) indirilir</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-light" disabled="@checking" @onclick="Check"><Icon Name="repeat" /> Şimdi denetle</button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7 d-flex flex-column gap-4">
+        <div class="panel">
+            <div class="panel-head"><Icon Name="download" /><h2>Sürüm</h2></div>
+            <div class="panel-body">
+                <dl class="dl-grid">
+                    <dt>Kurulu sürüm</dt><dd class="fw-650">@UpdateService.CurrentVersion.ToString(3)</dd>
+                    <dt>En yeni sürüm</dt>
+                    <dd>
+                        @if (Updates.Latest is { } l)
+                        {
+                            <span class="fw-650">@l.Version.ToString(3)</span>
+                            @if (l.PublishedAt is { } p) { <span class="text-secondary"> · @Display.Date(DateOnly.FromDateTime(p.LocalDateTime))</span> }
+                            <a class="ms-2 small" href="@l.Url" target="_blank" rel="noopener">GitHub'da aç</a>
+                        }
+                        else if (!Updates.Enabled) { <span class="text-secondary">Güncelleme denetimi ayarlarda kapalı.</span> }
+                        else { <span class="text-secondary">Henüz denetlenmedi.</span> }
+                    </dd>
+                    @if (Updates.CheckedAt != default)
+                    {
+                        <dt>Son denetim</dt><dd>@Updates.CheckedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm")</dd>
+                    }
+                </dl>
+
+                @if (Updates.LastError is { } err)
+                {
+                    <div class="callout callout-warning mt-3"><Icon Name="alert" /> @err</div>
+                }
+                else if (Updates.UpdateAvailable && Updates.Latest is { } newer)
+                {
+                    <div class="callout callout-info mt-3">
+                        <Icon Name="download" />
+                        <div>
+                            <div class="fw-650">Yeni sürüm var: @newer.Version.ToString(3)</div>
+                            <div class="small">Güncelleme sırasında program birkaç dakika kapanır; önce otomatik yedek alınır, yeni sürüm açılmazsa eski sürüme dönülür.</div>
+                        </div>
+                    </div>
+                    @if (pending is null)
+                    {
+                        <button class="btn btn-primary mt-3" @onclick="() => confirm = true"><Icon Name="download" /> Şimdi güncelle</button>
+                    }
+                }
+                else if (Updates.Latest is not null)
+                {
+                    <div class="callout callout-success mt-3"><Icon Name="check-circle" /> Program güncel.</div>
+                }
+
+                @if (pending is not null)
+                {
+                    <div class="callout callout-info mt-3">
+                        <Icon Name="clock" />
+                        <div>
+                            <div class="fw-650">@pending.Tag sürümünün kurulması istendi (@pending.RequestedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm"), @pending.RequestedBy)</div>
+                            <div class="small">Güncelleme görevi en geç 10 dakika içinde başlar. Bu sayfa güncelleme sırasında bağlantıyı kaybeder; birkaç dakika sonra yenileyin.</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-light mt-2" @onclick="Cancel">İsteği geri al</button>
+                }
+            </div>
+        </div>
+
+        @if (Updates.Latest is { Notes.Length: > 0 } rel)
+        {
+            <div class="panel">
+                <div class="panel-head"><Icon Name="list" /><h2>@rel.Name: yenilikler</h2></div>
+                <div class="panel-body small guide-body">@((MarkupString)Markdig.Markdown.ToHtml(rel.Notes, NotesPipeline))</div>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-5 d-flex flex-column gap-4">
+        <div class="panel">
+            <div class="panel-head"><Icon Name="settings" /><h2>Otomatik güncelleme</h2></div>
+            <div class="panel-body">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="auto" checked="@auto" @onchange="ToggleAuto" />
+                    <label class="form-check-label" for="auto">Yeni sürüm çıkınca kendiliğinden kur (gece 03:00 ile 05:00 arası)</label>
+                </div>
+                <div class="form-text">Kapalıyken yeni sürüm yalnızca bu sayfada ve menüde "yeni" etiketiyle haber verilir.</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-head"><Icon Name="info" /><h2>Güncelleme görevi</h2></div>
+            <div class="panel-body small">
+                @if (status is null)
+                {
+                    <div class="callout callout-warning"><Icon Name="alert" />
+                        <div>Bu bilgisayarda güncelleme görevi henüz çalışmadı. Görev, kurulum betiğinin 1.1.0 ve sonraki sürümleriyle kurulur.
+                            Eski bir kurulumu güncellemek için kurulum rehberindeki "Yeni sürüme geçiş" bölümüne bakın.</div>
+                    </div>
+                }
+                else
+                {
+                    <dl class="dl-grid">
+                        <dt>Durum</dt><dd><span class="chip @StatusCss(status.State)">@StatusName(status.State)</span></dd>
+                        @if (status.Message is { } m) { <dt>Açıklama</dt><dd>@m</dd> }
+                        @if (status.Time is { } t) { <dt>Zaman</dt><dd>@t.LocalDateTime.ToString("dd.MM.yyyy HH:mm")</dd> }
+                    </dl>
+                }
+                <p class="text-secondary mt-3 mb-0">Güncelleme klasörü: <code>@Updates.Folder</code></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (confirm && Updates.Latest is { } target)
+{
+    <Modal Title="Güncellemeyi başlat" OnClose="() => confirm = false">
+        <ChildContent>
+            <p>Disci @target.Version.ToString(3) sürümü kurulacak. Kurulum sırasında program birkaç dakika açılmaz; diğer bilgisayarlardaki
+                kullanıcılara haber verin. Önce veritabanı yedeği alınır.</p>
+            <p class="m-0">Devam edilsin mi?</p>
+        </ChildContent>
+        <Footer>
+            <button class="btn btn-light" @onclick="() => confirm = false">Vazgeç</button>
+            <button class="btn btn-primary" @onclick="() => Install(target)"><Icon Name="download" /> Güncellemeyi başlat</button>
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private bool checking, confirm, auto;
+    private UpdateRequest? pending;
+    private UpdateStatus? status;
+
+    private static readonly Markdig.MarkdownPipeline NotesPipeline = Markdig.MarkdownExtensions.UseAdvancedExtensions(Markdig.MarkdownExtensions.DisableHtml(new Markdig.MarkdownPipelineBuilder())).Build();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Refresh();
+        await Updates.CheckAsync();
+    }
+
+    private void Refresh()
+    {
+        pending = Updates.PendingRequest();
+        status = Updates.Status();
+        auto = Updates.AutoInstall;
+    }
+
+    private async Task Check()
+    {
+        checking = true;
+        try { await Updates.CheckAsync(force: true); }
+        finally { checking = false; Refresh(); }
+    }
+
+    private async Task Install(ReleaseInfo target)
+    {
+        confirm = false;
+        var me = (await Me.PrincipalAsync()).Identity?.Name ?? "yönetici";
+        await Updates.RequestInstallAsync(target, me);
+        Refresh();
+    }
+
+    private async Task Cancel()
+    {
+        await Updates.CancelRequestAsync();
+        Refresh();
+    }
+
+    private async Task ToggleAuto(ChangeEventArgs e)
+    {
+        await Updates.SetAutoInstallAsync(e.Value is true);
+        Refresh();
+    }
+
+    private static string StatusName(string s) => s switch
+    {
+        "bekliyor" => "Bekliyor",
+        "indiriliyor" => "İndiriliyor",
+        "kuruluyor" => "Kuruluyor",
+        "tamam" => "Tamamlandı",
+        "hata" => "Hata",
+        _ => s,
+    };
+
+    private static string StatusCss(string s) => s switch { "tamam" => "chip-success", "hata" => "chip-danger", _ => "chip-info" };
+}

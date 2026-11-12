@@ -1,0 +1,5 @@
+<span class="status-badge st @Display.Css(Status)">@Display.Name(Status)</span>
+
+@code {
+    [Parameter, EditorRequired] public AppointmentStatus Status { get; set; }
+}

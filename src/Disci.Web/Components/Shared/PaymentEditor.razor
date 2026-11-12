@@ -1,0 +1,144 @@
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<Modal Title="@(PaymentId is null ? "Ödeme al" : "Ödemeyi düzenle")" OnClose="OnClose">
+    <ChildContent>
+        @if (PaymentId is null)
+        {
+        <div class="d-flex justify-content-between align-items-center p-3 mb-3 rounded-3" style="background:var(--c-surface-2)">
+            <div>
+                <div class="small text-secondary">Kalan borç</div>
+                <div class="fs-4 fw-bold tabular @(Remaining > 0 ? "money-neg" : "")">@Display.Money(Remaining)</div>
+            </div>
+            @if (Remaining > 0)
+            {
+                <button type="button" class="btn btn-soft btn-sm" @onclick="() => amount = Remaining">Tamamını al</button>
+            }
+        </div>
+        }
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <label class="form-label" for="pay-amount">Tutar (₺)</label>
+                <input id="pay-amount" type="number" min="0" step="0.01" class="form-control form-control-lg tabular" @bind="amount" autofocus />
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="pay-date">Tarih</label>
+                <input id="pay-date" type="date" class="form-control form-control-lg" @bind="date" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Ödeme şekli</label>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var (m, icon) in Methods)
+                    {
+                        <button type="button" class="btn @(method == m ? "btn-primary" : "btn-light")" @onclick="() => method = m">
+                            <Icon Name="@icon" /> @Display.Name(m)
+                        </button>
+                    }
+                </div>
+            </div>
+            @if (method is PaymentMethod.CreditCard or PaymentMethod.BankTransfer or PaymentMethod.Cheque)
+            {
+                <div class="col-sm-6">
+                    <label class="form-label" for="pay-bank">Banka</label>
+                    <input id="pay-bank" class="form-control" @bind="bank" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="pay-due">@(method == PaymentMethod.Cheque ? "Vade tarihi" : "Taksit / vade (isteğe bağlı)")</label>
+                    <input id="pay-due" type="date" class="form-control" @bind="dueDate" />
+                </div>
+            }
+            <div class="col-sm-8">
+                <label class="form-label" for="pay-desc">Açıklama</label>
+                <input id="pay-desc" class="form-control" placeholder="Örn. implant 1. taksit" @bind="description" />
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label" for="pay-receipt">Makbuz no</label>
+                <input id="pay-receipt" class="form-control" @bind="receiptNo" />
+            </div>
+        </div>
+        @if (error is not null)
+        {
+            <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div>
+        }
+    </ChildContent>
+    <Footer>
+        <button type="button" class="btn btn-light" @onclick="OnClose">Vazgeç</button>
+        <button type="button" class="btn btn-primary" disabled="@saving" @onclick="Save"><Icon Name="check" /> @(PaymentId is null ? $"{Display.Money(amount)} tahsil et" : "Kaydet")</button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public int PatientId { get; set; }
+    /// <summary>Set to change an existing payment instead of taking a new one.</summary>
+    [Parameter] public int? PaymentId { get; set; }
+    [Parameter] public decimal Remaining { get; set; }
+    [Parameter] public EventCallback<int> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private static readonly (PaymentMethod, string)[] Methods =
+    [
+        (PaymentMethod.Cash, "cash"), (PaymentMethod.CreditCard, "card"),
+        (PaymentMethod.BankTransfer, "repeat"), (PaymentMethod.Cheque, "receipt"),
+    ];
+
+    private decimal amount;
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? dueDate;
+    private PaymentMethod method = PaymentMethod.Cash;
+    private string? bank, description, receiptNo, error;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        amount = Math.Max(0, Remaining);
+        if (PaymentId is not { } id) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Payments.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id && p.PatientId == PatientId) is not { } p) return;
+        (amount, date, dueDate, method, bank, description, receiptNo) = (p.Amount, p.Date, p.DueDate, p.Method, p.BankName, p.Description, p.ReceiptNo);
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        if (amount <= 0)
+        {
+            error = "Tutar sıfırdan büyük olmalı.";
+            return;
+        }
+        saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            Payment p;
+            if (PaymentId is { } id)
+            {
+                if (await db.Payments.FirstOrDefaultAsync(x => x.Id == id && x.PatientId == PatientId) is not { } existing)
+                {
+                    error = "Ödeme bulunamadı; başka bir bilgisayarda silinmiş olabilir.";
+                    return;
+                }
+                p = existing;
+            }
+            else
+            {
+                p = new Payment { PatientId = PatientId, CreatedByUserId = await Me.IdAsync() };
+                db.Payments.Add(p);
+            }
+            p.Date = date;
+            p.DueDate = dueDate;
+            p.Method = method;
+            p.Amount = amount;
+            p.BankName = string.IsNullOrWhiteSpace(bank) ? null : bank.Trim();
+            p.Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            p.ReceiptNo = string.IsNullOrWhiteSpace(receiptNo) ? null : receiptNo.Trim();
+            await db.SaveChangesAsync();
+            await Events.NotifyAsync();
+            await OnSaved.InvokeAsync(p.Id);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

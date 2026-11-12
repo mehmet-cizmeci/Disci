@@ -1,0 +1,4 @@
+# Docker imajına yalnızca program girer; hasta verisi, yedekler ve ayarlar asla imaja kopyalanmaz.
+*
+!Dockerfile
+!app/

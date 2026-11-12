@@ -1,0 +1,29 @@
+﻿@using Disci.Infrastructure.Identity
+@inject CurrentUser Me
+
+<ul class="nav nav-pills flex-column">
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Profil</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Parola</NavLink>
+    </li>
+    @if (isDentist)
+    {
+        <li class="nav-item">
+            <NavLink class="nav-link" href="Account/Manage/Paylasim">Kayıtlarımı kimler görür</NavLink>
+        </li>
+    }
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage/TwoFactorAuthentication">İki adımlı doğrulama</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="Account/Manage/Passkeys">Geçiş anahtarları</NavLink>
+    </li>
+</ul>
+
+@code {
+    private bool isDentist;
+
+    protected override async Task OnInitializedAsync() => isDentist = await Me.DentistIdAsync() is not null;
+}

@@ -1,0 +1,20 @@
+<div class="kpi tone-@Tone">
+    <div class="kpi-icon"><Icon Name="@IconName" /></div>
+    <div class="min-w-0">
+        <div class="kpi-label">@Title</div>
+        <div class="kpi-value">@Value</div>
+        @if (Hint is not null)
+        {
+            <div class="kpi-hint">@Hint</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string IconName { get; set; } = "trend";
+    /// <summary>primary, danger, warning, info, success, violet.</summary>
+    [Parameter] public string Tone { get; set; } = "primary";
+}

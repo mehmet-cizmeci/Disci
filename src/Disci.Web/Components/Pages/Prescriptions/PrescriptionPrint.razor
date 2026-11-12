@@ -1,0 +1,106 @@
+@page "/recete/{Id:int}"
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject CurrentUser Me
+@inject ClinicInfo Clinic
+
+<PageTitle>Reçete - Disci</PageTitle>
+
+@if (rx is null)
+{
+    <div class="panel"><div class="empty">Reçete bulunamadı.</div></div>
+}
+else
+{
+    <div class="d-flex gap-2 mb-3 no-print">
+        <a href="hastalar/@rx.PatientId" class="btn btn-light"><Icon Name="chevron-left" /> Hasta kartı</a>
+        <button type="button" class="btn btn-primary" onclick="window.print()"><Icon Name="printer" /> Yazdır</button>
+        @if (writer is not null)
+        {
+            <span class="small text-secondary align-self-center ms-2">Düzenleyen: @writer</span>
+        }
+    </div>
+
+    <div class="panel mx-auto rx-sheet">
+        <div class="panel-body p-4">
+            <div class="d-flex justify-content-between align-items-start pb-3 mb-3" style="border-bottom:2px solid var(--c-text)">
+                <div>
+                    <div class="fs-5 fw-bold">@rx.Dentist.FullName</div>
+                    @if (rx.Dentist.Specialty is not null) { <div class="small">@rx.Dentist.Specialty</div> }
+                    @if (rx.Dentist.DiplomaNo is not null) { <div class="small text-secondary">Diploma no: @rx.Dentist.DiplomaNo</div> }
+                </div>
+                <div class="text-end small">
+                    <div class="fw-650">@clinic?.Name</div>
+                    <div class="text-secondary">@clinic?.Address</div>
+                    <div class="text-secondary">@clinic?.Phone</div>
+                </div>
+            </div>
+
+            <div class="row small mb-3 g-1">
+                <div class="col-8"><span class="text-secondary">Hasta:</span> <span class="fw-650">@rx.Patient.FullName</span></div>
+                <div class="col-4 text-end"><span class="text-secondary">Tarih:</span> @Display.Date(rx.Date)</div>
+                <div class="col-8"><span class="text-secondary">TC kimlik no:</span> @rx.Patient.NationalId</div>
+                <div class="col-4 text-end">@(rx.Patient.BirthDate is null ? "" : $"{Display.Age(rx.Patient.BirthDate)}")</div>
+                @if (rx.Diagnosis is not null)
+                {
+                    <div class="col-12"><span class="text-secondary">Tanı:</span> @rx.Diagnosis</div>
+                }
+                @if (PrescriptionSafety.IsAllergy(rx.Patient.Anamnesis?.DrugAllergies))
+                {
+                    <div class="col-12"><span class="text-secondary">İlaç alerjisi:</span> <span class="fw-650">@rx.Patient.Anamnesis!.DrugAllergies</span></div>
+                }
+            </div>
+
+            <div class="rx-symbol">R<sub>x</sub></div>
+            <ol class="rx-items">
+                @foreach (var i in rx.Items.OrderBy(i => i.Id))
+                {
+                    <li>
+                        <div class="d-flex justify-content-between gap-3">
+                            <span class="fw-650">@i.MedicationName @i.Dose</span>
+                            <span class="text-nowrap">@i.Quantity kutu</span>
+                        </div>
+                        @if (i.Usage is not null) { <div class="small">Kullanım: @i.Usage</div> }
+                    </li>
+                }
+            </ol>
+
+            @if (rx.Notes is not null)
+            {
+                <div class="small mt-3" style="white-space:pre-line">@rx.Notes</div>
+            }
+
+            <div class="d-flex justify-content-end mt-5">
+                <div class="text-center small" style="min-width:200px;border-top:1px solid var(--c-border-strong);padding-top:.4rem">
+                    @rx.Dentist.FullName<br /><span class="text-secondary">İmza / kaşe</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (AutoPrint == 1)
+    {
+        <script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [SupplyParameterFromQuery(Name = "yazdir")] private int? AutoPrint { get; set; }
+
+    private Prescription? rx;
+    private string? writer;
+
+    private Disci.Domain.ClinicProfile? clinic;
+
+    protected override async Task OnInitializedAsync()
+    {
+        clinic = await Clinic.GetAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        rx = await db.Prescriptions.AsNoTracking().Visible(await Me.AccessAsync())
+            .Include(p => p.Dentist).Include(p => p.Items)
+            .Include(p => p.Patient).ThenInclude(p => p.Anamnesis)
+            .FirstOrDefaultAsync(p => p.Id == Id);
+        if (rx?.CreatedByUserId is { } uid)
+            writer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstOrDefaultAsync();
+    }
+}

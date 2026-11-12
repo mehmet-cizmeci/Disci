@@ -1,0 +1,289 @@
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<Modal Title="Tedavi ekle" Wide="true" OnClose="OnClose">
+    <ChildContent>
+        @if (loading)
+        {
+            <p class="text-secondary">Yükleniyor...</p>
+        }
+        else
+        {
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">Kayıt türü</label>
+                    <div class="seg w-100">
+                        <button type="button" class="flex-fill @(kind == TreatmentKind.Planned ? "active" : "")" @onclick="() => kind = TreatmentKind.Planned">Plan</button>
+                        <button type="button" class="flex-fill @(kind == TreatmentKind.Completed ? "active" : "")" @onclick="() => kind = TreatmentKind.Completed">Yapıldı</button>
+                        <button type="button" class="flex-fill @(kind == TreatmentKind.Finding ? "active" : "")" @onclick="() => kind = TreatmentKind.Finding">Bulgu</button>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label" for="tr-date">Tarih</label>
+                    <input id="tr-date" type="date" class="form-control" @bind="date" />
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label" for="tr-dentist">Hekim</label>
+                    <select id="tr-dentist" class="form-select" @bind="dentistId">
+                        <option value="0">—</option>
+                        @foreach (var d in dentists)
+                        {
+                            <option value="@d.Id">@d.FullName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center mb-1">
+                <label class="form-label m-0">Dişler <span class="fw-normal">(boş bırakılırsa tüm ağız)</span></label>
+                <div class="seg ms-auto" role="group" aria-label="Şema görünümü">
+                    <button type="button" class="@(archView ? "" : "active")" @onclick="() => archView = false">Gerçekçi</button>
+                    <button type="button" class="@(archView ? "active" : "")" @onclick="() => archView = true">Kavis</button>
+                </div>
+            </div>
+            @if (archView)
+            {
+                <ToothChart Selectable="true" @bind-Selected="teeth" />
+            }
+            else
+            {
+                <DentalChart Selectable="true" @bind-Selected="teeth" />
+            }
+
+            <div class="row g-2 align-items-end mt-2">
+                <div class="col-md-7">
+                    <label class="form-label">İşlem (@priceListName)</label>
+                    <div class="picker">
+                        <div class="input-icon">
+                            <Icon Name="search" />
+                            <input class="form-control" placeholder="İşlem adı veya kodu" @bind="procTerm" @bind:event="oninput" />
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(procTerm) && chosen?.Name != procTerm)
+                        {
+                            <div class="picker-menu">
+                                @foreach (var p in Matches)
+                                {
+                                    <button type="button" @onclick="() => Choose(p)">
+                                        <span class="flex-grow-1 sym-cell">@((MarkupString)ToothSymbols.Icon(p.Symbol)) @p.Name <span class="small text-secondary">@p.Code</span></span>
+                                        <span class="small fw-650 tabular">@(p.Price is null ? "" : Display.Money(p.Price.Value))</span>
+                                    </button>
+                                }
+                                @if (!Matches.Any())
+                                {
+                                    <div class="p-2 small text-secondary">Bulunamadı. Yazdığınız ad serbest işlem olarak eklenebilir.</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-7 col-md-3">
+                    <label class="form-label" for="tr-price">Diş başı ücret (₺)</label>
+                    <input id="tr-price" type="number" min="0" step="0.01" class="form-control tabular" @bind="price" />
+                </div>
+                <div class="col-5 col-md-2">
+                    <button type="button" class="btn btn-soft w-100" @onclick="AddLine"><Icon Name="plus" /> Ekle</button>
+                </div>
+            </div>
+            @if (Surface.Applies(CurrentSymbol) && teeth.Count > 0)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                    <span class="form-label m-0">Yüzeyler <span class="fw-normal text-secondary">(isteğe bağlı)</span></span>
+                    @foreach (var (code, name) in Surface.Names)
+                    {
+                        var c = code;
+                        <button type="button" class="chip @(surfaces.Contains(c) ? "active" : "")" title="@name" aria-pressed="@surfaces.Contains(c).ToString().ToLowerInvariant()"
+                                @onclick="() => { if (!surfaces.Remove(c)) surfaces.Add(c); }">@c</button>
+                    }
+                    <span class="small text-secondary">M mezial · O okluzal · D distal · B bukkal · L lingual</span>
+                </div>
+            }
+            @if (discount is > 0)
+            {
+                <div class="form-text">Hastanın %@discount.Value.ToString("0.##") indirimi uygulandı.</div>
+            }
+
+            <div class="hr"></div>
+            @if (lines.Count == 0)
+            {
+                <div class="text-secondary small">Diş seçip işlemi ekleyin. Birden çok işlem ekleyebilirsiniz.</div>
+            }
+            else
+            {
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>İşlem</th><th>Diş</th><th class="text-end">Ücret</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var l in lines)
+                        {
+                            <tr>
+                                <td>@l.Name</td>
+                                <td>@(l.Teeth.Count == 0 ? "Tüm ağız" : string.Join(", ", l.Teeth.Order())) @if (l.Surfaces is { } sf) { <span class="small text-secondary ms-1">@sf</span> }</td>
+                                <td class="text-end tabular">@Display.Money(l.Total)</td>
+                                <td class="text-end"><button class="btn btn-sm btn-light btn-icon" title="Çıkar" @onclick="() => lines.Remove(l)"><Icon Name="x" Class="ico-sm" /></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td colspan="2">Toplam</td><td class="text-end tabular">@Display.Money(lines.Sum(l => l.Total))</td><td></td></tr></tfoot>
+                </table>
+            }
+            @if (error is not null)
+            {
+                <div class="callout callout-warning mt-3"><Icon Name="alert" /> @error</div>
+            }
+        }
+    </ChildContent>
+    <Footer>
+        <button type="button" class="btn btn-light" @onclick="OnClose">Vazgeç</button>
+        <button type="button" class="btn btn-primary" disabled="@(saving || (lines.Count == 0 && string.IsNullOrWhiteSpace(procTerm)))" @onclick="Save">
+            <Icon Name="check" /> @(kind == TreatmentKind.Completed ? "Yapıldı olarak kaydet" : kind == TreatmentKind.Planned ? "Plana ekle" : "Bulguyu kaydet")
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public int PatientId { get; set; }
+    [Parameter] public TreatmentKind InitialKind { get; set; } = TreatmentKind.Planned;
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool loading = true, saving;
+    private TreatmentKind kind;
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Today);
+    private int dentistId;
+    private List<Dentist> dentists = [];
+    private AccessScope access = AccessScope.Everything;
+    private List<ProcOption> procedures = [];
+    private string priceListName = "";
+    private decimal? discount;
+    private HashSet<int> teeth = [];
+    private string? procTerm, error;
+    private ProcOption? chosen;
+    private readonly HashSet<char> surfaces = [];
+    private bool archView;
+
+    /// <summary>Picture of the procedure being entered; fillings, caries and sealants get the surface picker.</summary>
+    private string CurrentSymbol => chosen is { } c && c.Name == procTerm ? c.Symbol : ToothSymbols.For(null, procTerm);
+    private decimal price;
+    private readonly List<Line> lines = [];
+
+    private sealed record ProcOption(int Id, string Code, string Name, decimal? Price, string Symbol);
+
+    private sealed record Line(int? ProcedureId, string Name, HashSet<int> Teeth, decimal UnitPrice, string? Surfaces = null)
+    {
+        public decimal Total => UnitPrice * Math.Max(1, Teeth.Count);
+    }
+
+    private IEnumerable<ProcOption> Matches
+    {
+        get
+        {
+            var words = (procTerm ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return procedures.Where(p => words.All(w => TextSearch.Contains(p.Name, w) || TextSearch.Contains(p.Code, w))).Take(10);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        kind = InitialKind;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        access = await Me.AccessAsync();
+        dentists = await db.Dentists.AsNoTracking().Editable(access).Where(d => d.IsActive).OrderBy(d => d.FullName).ToListAsync();
+        var patient = await db.Patients.AsNoTracking().Where(p => p.Id == PatientId)
+            .Select(p => new { p.PriceListId, p.DiscountRate, p.PrimaryDentistId }).FirstAsync();
+        discount = patient.DiscountRate;
+
+        // The patient's own list, else the clinic default, else any list at all.
+        var list = await db.PriceLists.AsNoTracking()
+            .OrderByDescending(l => l.Id == patient.PriceListId).ThenByDescending(l => l.IsDefault).ThenBy(l => l.Id)
+            .FirstOrDefaultAsync();
+        priceListName = list?.Name ?? "fiyat listesi yok";
+        var prices = list is null ? [] : await db.PriceListItems.Where(i => i.PriceListId == list.Id).ToDictionaryAsync(i => i.ProcedureId, i => i.Price);
+        procedures = (await db.Procedures.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync())
+            .Select(p => new ProcOption(p.Id, p.Code, p.Name, prices.TryGetValue(p.Id, out var v) ? v : null, ToothSymbols.For(p.Symbol, p.Name)))
+            .OrderBy(p => p.Price is null).ThenBy(p => p.Name)
+            .ToList();
+
+        var mine = await Me.DentistIdAsync();
+        dentistId = new[] { mine, patient.PrimaryDentistId }.FirstOrDefault(x => x is { } v && dentists.Any(d => d.Id == v)) ?? (dentists.Count == 1 ? dentists[0].Id : 0);
+        loading = false;
+    }
+
+    private void Choose(ProcOption p)
+    {
+        chosen = p;
+        procTerm = p.Name;
+        var basePrice = p.Price ?? 0;
+        price = discount is > 0 ? Math.Round(basePrice * (1 - discount.Value / 100), 2) : basePrice;
+    }
+
+    private void AddLine()
+    {
+        error = null;
+        var name = procTerm?.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            error = "Bir işlem seçin veya yazın.";
+            return;
+        }
+        if (price < 0)
+        {
+            error = "Ücret eksi olamaz.";
+            return;
+        }
+        var match = chosen?.Name == name ? chosen : null;
+        var lineSurfaces = Surface.Applies(match?.Symbol ?? ToothSymbols.For(null, name)) && teeth.Count > 0 ? Surface.Format(surfaces) : null;
+        lines.Add(new Line(match?.Id, name, [.. teeth], price, lineSurfaces));
+        surfaces.Clear();
+        teeth = [];
+        procTerm = null;
+        chosen = null;
+        price = 0;
+    }
+
+    private async Task Save()
+    {
+        // A procedure typed or picked but not yet added with "Ekle" is what the user means to save.
+        if (!string.IsNullOrWhiteSpace(procTerm))
+        {
+            AddLine();
+            if (error is not null) return;
+        }
+        if (lines.Count == 0) return;
+        if (dentistId != 0 && !access.CanEdit(dentistId)) { error = "Bu hekim adına tedavi girme yetkiniz yok."; return; }
+        saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var session = new TreatmentSession
+            {
+                PatientId = PatientId,
+                Date = date,
+                Kind = kind,
+                DentistId = dentistId == 0 ? null : dentistId,
+            };
+            // One row per tooth, as the chart and the old system expect.
+            foreach (var l in lines)
+            {
+                IEnumerable<int?> targets = l.Teeth.Count == 0 ? [null] : l.Teeth.Order().Select(t => (int?)t);
+                foreach (var tooth in targets)
+                    session.Items.Add(new TreatmentItem
+                    {
+                        ProcedureId = l.ProcedureId,
+                        Description = l.Name,
+                        ToothNumber = tooth,
+                        Surfaces = tooth is null ? null : l.Surfaces,
+                        // Findings are recorded, not billed.
+                        Price = kind == TreatmentKind.Finding ? 0 : l.UnitPrice,
+                    });
+            }
+            db.TreatmentSessions.Add(session);
+            await db.SaveChangesAsync();
+            await Events.NotifyAsync();
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

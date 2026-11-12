@@ -1,0 +1,28 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+TestResults/
+
+
+# Hasta verileri, fotoğraflar ve aktarım raporları asla depoya girmemeli.
+data/
+*.sqlite
+*.db
+*.mdf
+*.ldf
+*.bak
+*.csv
+
+# Kurulum paketi çıktısı
+dist/
+
+# Kişiye özel kurulum notları (klasör yolları)
+KURULUM-YAPILACAKLARIM.md
+# PDF üretimi sırasında kalan ara dosya
+docs/*.html
+
+# SQL Server Express çevrimdışı kurulum dosyası (deploy\sql-indir.ps1 indirir, ~700 MB)
+deploy/sql-express/

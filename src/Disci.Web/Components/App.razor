@@ -1,0 +1,54 @@
+﻿<!DOCTYPE html>
+<html lang="@Lang">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* Must run before any browser extension: some (e.g. Firefox "WebSocketSniff") replace window.WebSocket at
+       document end with a wrapper Blazor cannot use, and every button on the page stops working. *@
+    <script>window.__disciWebSocket = window.WebSocket;</script>
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Disci.Web.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet />
+    @if (Lang == "en")
+    {
+        @* English: Turkish texts are swapped on the page (wwwroot/i18n). *@
+        <script src="@Assets["i18n/en.js"]"></script>
+        <script src="@Assets["i18n/i18n.js"]"></script>
+    }
+</head>
+
+<body>
+    <Routes />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]" autostart="false"></script>
+    <script>
+        // Connect with the browser's own WebSocket captured above, whatever an extension did to window.WebSocket since.
+        Blazor.start({
+            circuit: {
+                configureSignalR: builder => builder.withUrl('_blazor', { WebSocket: window.__disciWebSocket || window.WebSocket })
+            }
+        });
+    </script>
+    <script>
+        // Close the phone/tablet side menu once a link in it is followed.
+        document.addEventListener('click', e => {
+            if (e.target.closest('.side a')) { const t = document.getElementById('nav-toggle'); if (t) t.checked = false; }
+        });
+    </script>
+    <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    /// <summary>Screen language from the disci-dil cookie (set at sign-in from the user's choice, or by /dil/en).</summary>
+    private string Lang => ScreenLanguage.From(HttpContext);
+}

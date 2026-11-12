@@ -1,0 +1,145 @@
+﻿@page "/Account/Manage"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Disci.Infrastructure.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicInfo Clinic
+
+<PageTitle>Hesabım - Disci</PageTitle>
+
+<h3 class="h5">Profil</h3>
+<StatusMessage />
+
+<div class="row">
+    <div class="col-xl-8">
+        @if (!canEdit)
+        {
+            <div class="callout callout-info mb-3"><Icon Name="alert" /> Bilgilerinizi klinik yöneticisi değiştirir. Bir yanlışlık görürseniz yöneticiye bildirin.</div>
+        }
+        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            <div class="mb-3">
+                <label for="Input.FullName" class="form-label">Ad soyad</label>
+                <InputText @bind-Value="Input.FullName" id="Input.FullName" class="form-control" disabled="@(!canEdit)" />
+                <ValidationMessage For="() => Input.FullName" class="text-danger" />
+            </div>
+            <div class="mb-3">
+                <label for="Input.Email" class="form-label">E-posta</label>
+                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" disabled="@(!canEdit)" />
+                <div class="form-text">Giriş yaparken bu e-postayı kullanırsınız. Değiştirirseniz bir sonraki girişte yenisini yazın.</div>
+                <ValidationMessage For="() => Input.Email" class="text-danger" />
+            </div>
+            <div class="mb-3">
+                <label for="Input.PhoneNumber" class="form-label">Telefon</label>
+                <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="form-control" autocomplete="tel" disabled="@(!canEdit)" />
+                <ValidationMessage For="() => Input.PhoneNumber" class="text-danger" />
+            </div>
+            <div class="mb-3">
+                <label for="Input.Language" class="form-label">Ekran dili</label>
+                <InputSelect @bind-Value="Input.Language" id="Input.Language" class="form-select" translate="no">
+                    <option value="tr">Türkçe</option>
+                    <option value="en">English</option>
+                </InputSelect>
+            </div>
+            <dl class="row small mb-3">
+                <dt class="col-sm-4 text-secondary fw-normal">Rol</dt><dd class="col-sm-8">@roleNames</dd>
+                <dt class="col-sm-4 text-secondary fw-normal">Hekim kaydı</dt><dd class="col-sm-8">@(dentistName ?? "Yok")</dd>
+            </dl>
+            <button type="submit" class="btn btn-primary"><Icon Name="check" /> Kaydet</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private ApplicationUser? user;
+    private bool canEdit;
+    private string? roleNames, dentistName;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        user = await UserManager.GetUserAsync(HttpContext.User);
+        if (user is null)
+        {
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
+        }
+
+        var roles = await UserManager.GetRolesAsync(user);
+        roleNames = string.Join(", ", roles.Select(Roles.DisplayName));
+        canEdit = roles.Contains(Roles.Admin) || (await Clinic.GetAsync()).UsersCanEditOwnProfile;
+        if (user.DentistId is { } did)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            dentistName = await db.Dentists.Where(d => d.Id == did).Select(d => d.FullName).FirstOrDefaultAsync();
+        }
+
+        // On a post the form values are already bound; only fill the form on a plain visit.
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            Input.FullName = user.FullName;
+            Input.Email = user.Email ?? "";
+            Input.PhoneNumber = user.PhoneNumber;
+            Input.Language = ScreenLanguage.Normalize(user.Language ?? ScreenLanguage.From(HttpContext));
+        }
+        else if (!canEdit)
+        {
+            // Disabled fields are not posted; keep the stored values so validation passes.
+            Input.FullName = user.FullName;
+            Input.Email = user.Email ?? "";
+            Input.PhoneNumber = user.PhoneNumber;
+        }
+    }
+
+    private async Task OnValidSubmitAsync()
+    {
+        if (user is null)
+        {
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
+        }
+        // The screen language is always the user's own choice; name, e-mail and phone only when the clinic allows it.
+        user.Language = ScreenLanguage.Normalize(Input.Language);
+        ScreenLanguage.Set(HttpContext.Response, user.Language);
+        var result = canEdit
+            ? await UserProfile.UpdateAsync(UserManager, user, Input.FullName, Input.Email, Input.PhoneNumber)
+            : await UserManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            RedirectManager.RedirectToCurrentPageWithStatus("Hata: " + string.Join(" ", result.Errors.Select(e => e.Description)), HttpContext);
+            return;
+        }
+
+        await SignInManager.RefreshSignInAsync(user);
+        RedirectManager.RedirectToCurrentPageWithStatus("Bilgileriniz kaydedildi.", HttpContext);
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Ad soyad gerekli.")]
+        [StringLength(100, ErrorMessage = "Ad soyad en fazla 100 karakter olabilir.")]
+        public string FullName { get; set; } = "";
+
+        [Required(ErrorMessage = "E-posta gerekli.")]
+        [EmailAddress(ErrorMessage = "Geçerli bir e-posta girin.")]
+        public string Email { get; set; } = "";
+
+        [Phone(ErrorMessage = "Geçerli bir telefon numarası girin.")]
+        public string? PhoneNumber { get; set; }
+
+        public string Language { get; set; } = "tr";
+    }
+}

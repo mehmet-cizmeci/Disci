@@ -1,0 +1,129 @@
+@* Who may see or work on one dentist's records: a setting for all dentists, one for all assistants, and per-user exceptions.
+   Used by the admin under Klinik ayarları and by the dentist under Hesabım (when the clinic allows it). *@
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject ClinicEvents Events
+
+@if (dentist is null)
+{
+    <p class="text-secondary">Yükleniyor...</p>
+}
+else
+{
+    <p class="small text-secondary">
+        Hastaları (kendi hastası olarak işaretlenenler), randevuları, tedavileri ve reçeteleri kimin görebileceğini ve kimin bu hekim
+        adına işlem yapabileceğini belirler. Yöneticiler her zaman her şeyi görür. "Göremez" seçilirse hekimin adı da başkalarının
+        ekranlarında (takvim, hekim seçimi, raporlar) çıkmaz.
+    </p>
+    <div class="row g-3">
+        <div class="col-sm-6">
+            <label class="form-label" for="sh-dent">Diğer hekimler</label>
+            <select id="sh-dent" class="form-select" @bind="dentist.ShareWithDentists">
+                @foreach (var a in Levels) { <option value="@a">@DataAccessRules.Name(a)</option> }
+            </select>
+        </div>
+        <div class="col-sm-6">
+            <label class="form-label" for="sh-asst">Asistanlar</label>
+            <select id="sh-asst" class="form-select" @bind="dentist.ShareWithAssistants">
+                @foreach (var a in Levels) { <option value="@a">@DataAccessRules.Name(a)</option> }
+            </select>
+        </div>
+    </div>
+
+    <h3 class="h6 mt-4">Kişiye özel izinler</h3>
+    <p class="small text-secondary mb-2">Yukarıdaki ayardan farklı olması gereken kişiler (ör. yalnızca kendi asistanınız görsün).</p>
+    @if (grants.Count == 0)
+    {
+        <div class="small text-secondary mb-2">Kişiye özel izin yok.</div>
+    }
+    else
+    {
+        <div class="list mb-2">
+            @foreach (var g in grants)
+            {
+                <div class="list-row">
+                    <span class="grow title">@UserName(g.UserId)</span>
+                    <select class="form-select form-select-sm" style="width:auto" @bind="g.Access" aria-label="İzin">
+                        @foreach (var a in Levels) { <option value="@a">@DataAccessRules.Name(a)</option> }
+                    </select>
+                    <button class="btn btn-sm btn-light btn-icon" title="Kaldır" @onclick="() => grants.Remove(g)"><Icon Name="trash" Class="ico-sm" /></button>
+                </div>
+            }
+        </div>
+    }
+    var free = users.Where(u => grants.All(g => g.UserId != u.Id)).ToList();
+    @if (free.Count > 0)
+    {
+        <div class="d-flex gap-2">
+            <select class="form-select" @bind="newUserId" aria-label="Kişi">
+                <option value="">Kişi seçin...</option>
+                @foreach (var u in free) { <option value="@u.Id">@u.Name</option> }
+            </select>
+            <button class="btn btn-light text-nowrap" disabled="@string.IsNullOrEmpty(newUserId)" @onclick="AddGrant"><Icon Name="plus" Class="ico-sm" /> Ekle</button>
+        </div>
+    }
+
+    <div class="d-flex align-items-center gap-3 mt-4">
+        <button class="btn btn-primary" @onclick="Save"><Icon Name="check" /> Paylaşım ayarlarını kaydet</button>
+        @if (message is not null) { <span class="small text-success">@message</span> }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int DentistId { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private static readonly DataAccess[] Levels = [DataAccess.Edit, DataAccess.View, DataAccess.None];
+
+    private sealed class GrantRow
+    {
+        public required string UserId { get; init; }
+        public DataAccess Access { get; set; }
+    }
+
+    private sealed record UserOption(string Id, string Name);
+
+    private Dentist? dentist;
+    private List<GrantRow> grants = [];
+    private List<UserOption> users = [];
+    private string? newUserId, message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        dentist = await db.Dentists.AsNoTracking().FirstOrDefaultAsync(d => d.Id == DentistId);
+        grants = await db.DentistAccessGrants.AsNoTracking().Where(g => g.DentistId == DentistId)
+            .Select(g => new GrantRow { UserId = g.UserId, Access = g.Access }).ToListAsync();
+        // The dentist's own accounts always have full access, so they are not offered.
+        users = await db.Users.AsNoTracking().Where(u => u.IsActive && u.DentistId != DentistId).OrderBy(u => u.FullName)
+            .Select(u => new UserOption(u.Id, u.FullName)).ToListAsync();
+        message = null;
+    }
+
+    private string UserName(string id) => users.FirstOrDefault(u => u.Id == id)?.Name ?? "(kullanıcı)";
+
+    private void AddGrant()
+    {
+        if (string.IsNullOrEmpty(newUserId)) return;
+        grants.Add(new GrantRow { UserId = newUserId, Access = DataAccess.View });
+        newUserId = null;
+    }
+
+    private async Task Save()
+    {
+        if (dentist is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var row = await db.Dentists.Include(d => d.AccessGrants).FirstAsync(d => d.Id == DentistId);
+        row.ShareWithDentists = dentist.ShareWithDentists;
+        row.ShareWithAssistants = dentist.ShareWithAssistants;
+        db.DentistAccessGrants.RemoveRange(row.AccessGrants.Where(g => grants.All(x => x.UserId != g.UserId)));
+        foreach (var g in grants)
+        {
+            if (row.AccessGrants.FirstOrDefault(x => x.UserId == g.UserId) is { } existing) existing.Access = g.Access;
+            else row.AccessGrants.Add(new DentistAccessGrant { UserId = g.UserId, Access = g.Access });
+        }
+        await db.SaveChangesAsync();
+        message = "Kaydedildi. Diğer kullanıcıların ekranları sayfa yenilenince güncellenir.";
+        await Events.NotifyAsync();
+        await OnSaved.InvokeAsync();
+    }
+}

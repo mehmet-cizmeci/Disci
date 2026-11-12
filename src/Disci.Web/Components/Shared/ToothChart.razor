@@ -1,0 +1,217 @@
+@using static Disci.Web.Services.ToothGeometry
+@* FDI tooth chart drawn as the two dental arches, seen as the dentist facing the patient: the patient's right is
+   on the left of the screen (18 → 11 | 21 → 28 above, 48 → 41 | 31 → 38 below). Teeth are sized by their real
+   mesiodistal width and shaped by type (incisor, canine, premolar, molar); deciduous teeth sit on an inner arch.
+   Read-only it colours teeth by treatment state; with Selectable it is a multi-tooth picker. *@
+<div class="arch-wrap">
+    <svg class="arch @(Selectable ? "selectable" : "")" viewBox="0 0 @W @H" role="group" aria-label="Diş şeması">
+        <text class="arch-side" x="10" y="@Num(MidY + 4)">SAĞ</text>
+        <text class="arch-side" x="@(W - 10)" y="@Num(MidY + 4)" text-anchor="end">SOL</text>
+        @if (!ShowDeciduous)
+        {
+            <g>
+                <text class="arch-jaw" x="@Num(W / 2)" y="@Num(UpperCy - 40)" text-anchor="middle">Üst çene</text>
+                <text class="arch-jaw" x="@Num(W / 2)" y="@Num(LowerCy + 48)" text-anchor="middle">Alt çene</text>
+            </g>
+        }
+        <line class="arch-mid" x1="@Num(W / 2)" y1="10" x2="@Num(W / 2)" y2="@Num(UpperCy - 58)" />
+        <line class="arch-mid" x1="@Num(W / 2)" y1="@Num(LowerCy + 66)" x2="@Num(W / 2)" y2="@Num(H - 10)" />
+        @foreach (var t in Teeth)
+        {
+            var tooth = t;
+            var css = $"t {Css(tooth.Number)}";
+            <g>
+            <g class="@css" transform="translate(@Num(tooth.X) @Num(tooth.Y)) rotate(@Num(tooth.Angle))"
+               @onclick="() => Toggle(tooth.Number)"
+               tabindex="@(Selectable ? 0 : -1)" role="@(Selectable ? "button" : null)"
+               aria-pressed="@(Selectable ? Selected.Contains(tooth.Number).ToString().ToLowerInvariant() : null)"
+               aria-label="Diş @tooth.Number" @onkeydown="e => Key(e, tooth.Number)">
+                <title>@(Titles?.GetValueOrDefault(tooth.Number) ?? $"Diş {tooth.Number}")</title>
+                <path class="crown" d="@tooth.Shape" />
+                @if (tooth.Detail is not null)
+                {
+                    <path class="cusp" d="@tooth.Detail" />
+                }
+                @if (!Selectable && Symbols?.GetValueOrDefault(tooth.Number) is { Count: > 0 } marks)
+                {
+                    @((MarkupString)string.Concat(marks.OrderBy(m => Layer(m.Key)).Select(m =>
+                        $"<g class=\"sym {m.State}\">{ToothSymbols.Svg(m.Key, tooth.Width, tooth.Depth, tooth.Shape)}</g>")))
+                }
+            </g>
+            <text class="t-num @Css(tooth.Number)" x="@Num(tooth.LabelX)" y="@Num(tooth.LabelY + 3.5)" text-anchor="middle">@tooth.Number</text>
+            </g>
+        }
+    </svg>
+</div>
+@if (!Selectable && Symbols is { Count: > 0 })
+{
+    var used = Symbols.Values.SelectMany(l => l).Select(m => m.Key).Distinct().OrderBy(Layer).ToList();
+    <div class="sym-legend">
+        @foreach (var k in used)
+        {
+            <span class="sym-legend-item">@((MarkupString)ToothSymbols.Icon(k)) @ToothSymbols.Name(k)</span>
+        }
+        <span class="sym-legend-item ms-auto">
+            <span class="sym-swatch done"></span> Yapıldı
+            <span class="sym-swatch plan ms-2"></span> Planlı
+            <span class="sym-swatch finding ms-2"></span> Bulgu
+        </span>
+    </div>
+}
+@if (Selectable)
+{
+    <div class="d-flex flex-wrap align-items-center gap-3 mt-1 small">
+        <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" id="deciduous-@uid" @bind="deciduous" />
+            <label class="form-check-label" for="deciduous-@uid">Süt dişleri</label>
+        </div>
+        @if (Selected.Count > 0)
+        {
+            <span class="text-secondary">Seçili: @string.Join(", ", Selected.Order())</span>
+            <button type="button" class="btn btn-sm btn-link p-0" @onclick="Clear">Temizle</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool Selectable { get; set; }
+    [Parameter] public HashSet<int> Selected { get; set; } = [];
+    [Parameter] public EventCallback<HashSet<int>> SelectedChanged { get; set; }
+    /// <summary>Tooth → CSS classes (done, plan, finding) for the read-only view.</summary>
+    [Parameter] public Dictionary<int, string>? Marks { get; set; }
+    [Parameter] public Dictionary<int, string>? Titles { get; set; }
+    /// <summary>Tooth → treatment pictures (ToothSymbols key + state css: done, plan, finding) for the read-only view.</summary>
+    [Parameter] public Dictionary<int, List<ToothMark>>? Symbols { get; set; }
+
+
+    /// <summary>Drawing order: outlines first, marks inside the tooth next, the extraction cross on top.</summary>
+    private static int Layer(string key) => key switch
+    {
+        "missing" or "impacted" => 0,
+        "crown" or "bridge" or "veneer" or "denture" => 1,
+        "filling" or "sealant" or "caries" or "lesion" or "fracture" or "other" => 2,
+        "post" or "rootcanal" or "implant" or "ortho" => 3,
+        _ => 4,
+    };
+
+    private bool deciduous;
+    private readonly string uid = Guid.NewGuid().ToString("N")[..6];
+
+    // Drawing area and the two arch centres (upper arch opens downwards, lower arch upwards).
+    private const double W = 560, H = 520, UpperCy = 228, LowerCy = 292, MidY = (UpperCy + LowerCy) / 2;
+
+
+    /// <summary>A tooth on the arch: centre, rotation (crown faces the arch centre) and its number position.</summary>
+    private sealed record Placed(int Number, double X, double Y, double Angle, string Shape, string? Detail, double LabelX, double LabelY, double Width, double Depth);
+
+
+    private bool ShowDeciduous => deciduous || (Marks?.Keys.Any(t => t > 50) ?? false) || Selected.Any(t => t > 50);
+
+    private IEnumerable<Placed> Teeth
+    {
+        get
+        {
+            // Quadrant first digits: patient's right side (screen left) is 1 above and 4 below.
+            IEnumerable<Placed> all = [
+                .. Arch(Upper, 1, 2, upper: true, a: 236, b: 196, labelOut: true),
+                .. Arch(Lower, 4, 3, upper: false, a: 226, b: 188, labelOut: true)];
+            if (ShowDeciduous)
+                all = all.Concat(Arch(UpperDeciduous, 5, 6, upper: true, a: 132, b: 112, labelOut: false))
+                         .Concat(Arch(LowerDeciduous, 8, 7, upper: false, a: 126, b: 106, labelOut: false));
+            return all;
+        }
+    }
+
+    /// <summary>
+    /// Lays one jaw's teeth along half an ellipse. Each tooth takes an angular share proportional to its width,
+    /// so molars are wide and lower incisors narrow, as in a real mouth.
+    /// </summary>
+    private static IEnumerable<Placed> Arch(Spec[] side, int rightQuadrant, int leftQuadrant, bool upper, double a, double b, bool labelOut)
+    {
+        var cy = upper ? UpperCy : LowerCy;
+        var total = side.Sum(t => t.Width);
+        // The back teeth stop a little short of horizontal, like a real arch that flares outwards.
+        const double span = Math.PI / 2 * 0.97;
+        var (angles, lengths) = ArcTable(a, b, span);
+        var mmToPx = lengths[^1] / total;
+
+        foreach (var (quadrant, dir) in new[] { (rightQuadrant, -1), (leftQuadrant, 1) })
+        {
+            double before = 0;
+            for (var i = 0; i < side.Length; i++)
+            {
+                var (kind, width) = (side[i].Kind, side[i].Width);
+                // Angle from the midline (front of the mouth) backwards, chosen so that every tooth gets arch
+                // length in proportion to its width (by angle alone the back teeth would overlap).
+                var phi = AngleAt(angles, lengths, (before + width / 2) * mmToPx);
+                before += width;
+
+                var x = W / 2 + dir * a * Math.Sin(phi);
+                var y = upper ? cy - b * Math.Cos(phi) : cy + b * Math.Cos(phi);
+                // Outward normal of the ellipse at this point, used for rotation and label position.
+                var nx = dir * Math.Sin(phi) / a;
+                var ny = (upper ? -1 : 1) * Math.Cos(phi) / b;
+                var len = Math.Sqrt(nx * nx + ny * ny);
+                nx /= len; ny /= len;
+                var angle = Math.Atan2(nx, -ny) * 180 / Math.PI;
+
+                var w = width * mmToPx * 0.9;
+                var depth = kind switch { Kind.Incisor => w * 0.78, Kind.Canine => w * 1.0, Kind.Premolar => w * 1.18, _ => w * 1.02 };
+                var (shape, detail) = Occlusal(kind, w, depth);
+                var off = (labelOut ? 1 : -1) * (depth / 2 + 11);
+                yield return new Placed(quadrant * 10 + i + 1, x, y, angle, shape, detail, x + nx * off, y + ny * off, w, depth);
+            }
+        }
+    }
+
+    /// <summary>Cumulative arc length of a quarter ellipse from the front (angle 0) back to the given span.</summary>
+    private static (double[] Angles, double[] Lengths) ArcTable(double a, double b, double span)
+    {
+        const int steps = 400;
+        var angles = new double[steps + 1];
+        var lengths = new double[steps + 1];
+        double px = 0, py = b;
+        for (var k = 1; k <= steps; k++)
+        {
+            var p = span * k / steps;
+            double x = a * Math.Sin(p), y = b * Math.Cos(p);
+            angles[k] = p;
+            lengths[k] = lengths[k - 1] + Math.Sqrt((x - px) * (x - px) + (y - py) * (y - py));
+            px = x; py = y;
+        }
+        return (angles, lengths);
+    }
+
+    private static double AngleAt(double[] angles, double[] lengths, double s)
+    {
+        var k = Array.BinarySearch(lengths, s);
+        if (k >= 0) return angles[k];
+        k = ~k;
+        if (k <= 0) return 0;
+        if (k >= lengths.Length) return angles[^1];
+        var f = (s - lengths[k - 1]) / (lengths[k] - lengths[k - 1]);
+        return angles[k - 1] + f * (angles[k] - angles[k - 1]);
+    }
+
+    /// <summary>SVG numbers need a dot decimal separator whatever the page culture (Turkish uses a comma).</summary>
+    private static string Num(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Css(int t) => Selected.Contains(t) ? "sel" : Marks?.GetValueOrDefault(t) ?? "";
+
+    private async Task Toggle(int t)
+    {
+        if (!Selectable) return;
+        var next = new HashSet<int>(Selected);
+        if (!next.Remove(t)) next.Add(t);
+        Selected = next;
+        await SelectedChanged.InvokeAsync(next);
+    }
+
+    private Task Key(KeyboardEventArgs e, int t) => Selectable && e.Key is "Enter" or " " ? Toggle(t) : Task.CompletedTask;
+
+    private async Task Clear()
+    {
+        Selected = [];
+        await SelectedChanged.InvokeAsync(Selected);
+    }
+}

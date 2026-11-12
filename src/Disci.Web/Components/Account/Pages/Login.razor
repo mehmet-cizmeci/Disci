@@ -1,0 +1,156 @@
+﻿@page "/Account/Login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+@using Disci.Infrastructure.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject ILogger<Login> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Giriş</PageTitle>
+
+<div style="width:100%;max-width:420px">
+    <div>
+        <section class="panel" style="box-shadow:var(--shadow-lg)">
+            <div class="panel-body p-4 p-sm-5">
+                <div class="side-brand p-0 mb-4" style="height:auto">
+                    <span class="logo"><Icon Name="tooth" /></span>
+                    <span>Disci<small>Diş kliniği yönetimi</small></span>
+                </div>
+                <h1 class="h4 mb-1">Hoş geldiniz</h1>
+                <p class="text-secondary mb-4">Kullanıcı adınız ve parolanızla giriş yapın.</p>
+                @if (Kurulum == 1) { <div class="alert alert-success">Kurulum tamamlandı. Şimdi oluşturduğunuz e-posta ve parolayla giriş yapın.</div> }
+                <StatusMessage Message="@errorMessage" />
+                <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" role="alert" />
+                    <div class="form-floating mb-3">
+                        <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" aria-required="true" placeholder="ad@ornek.com" />
+                        <label for="Input.Email" class="form-label">E-posta</label>
+                        <ValidationMessage For="() => Input.Email" class="text-danger" />
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="parola" />
+                        <label for="Input.Password" class="form-label">Parola</label>
+                        <ValidationMessage For="() => Input.Password" class="text-danger" />
+                    </div>
+                    <div class="checkbox mb-3">
+                        <label class="form-label">
+                            <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
+                            Beni hatırla
+                        </label>
+                    </div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Giriş yap</button>
+                    <div class="d-flex flex-column mt-3">
+                        <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Passkey ile giriş yap</PasskeySubmit>
+                    </div>
+                    <p class="text-secondary small mt-3 mb-0">Hesabınız yoksa veya parolanızı unuttuysanız klinik yöneticisine başvurun.</p>
+                    <p class="small mt-2 mb-0 d-flex gap-3">
+                        <a href="kilavuz">Kullanım kılavuzu</a>
+                        <span class="ms-auto" translate="no">
+                            <a href="dil/tr?geri=/Account/Login">Türkçe</a> · <a href="dil/en?geri=/Account/Login">English</a>
+                        </span>
+                    </p>
+                </EditForm>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private string? errorMessage;
+    private EditContext editContext = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    private int? Kurulum { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+
+        editContext = new EditContext(Input);
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            // Clear the existing external cookie to ensure a clean login process
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        if (!string.IsNullOrEmpty(Input.Passkey?.Error))
+        {
+            errorMessage = $"Hata: {Input.Passkey.Error}";
+            return;
+        }
+
+        SignInResult result;
+        if (!string.IsNullOrEmpty(Input.Passkey?.CredentialJson))
+        {
+            // When performing passkey sign-in, don't perform form validation.
+            result = await SignInManager.PasskeySignInAsync(Input.Passkey.CredentialJson);
+        }
+        else
+        {
+            // If doing a password sign-in, validate the form.
+            if (!editContext.Validate())
+            {
+                return;
+            }
+
+            // Failed passwords count towards lockout; deactivated accounts are locked indefinitely by the user admin page.
+            result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+        }
+
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("User logged in.");
+            RedirectManager.RedirectTo(ReturnUrl);
+        }
+        else if (result.RequiresTwoFactor)
+        {
+            RedirectManager.RedirectTo(
+                "Account/LoginWith2fa",
+                new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
+        }
+        else if (result.IsLockedOut)
+        {
+            Logger.LogWarning("User account locked out.");
+            RedirectManager.RedirectTo("Account/Lockout");
+        }
+        else
+        {
+            errorMessage = "Hata: E-posta veya parola yanlış.";
+        }
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "E-posta gerekli.")]
+        [EmailAddress(ErrorMessage = "Geçerli bir e-posta girin.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Parola gerekli.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        [Display(Name = "Beni hatırla")]
+        public bool RememberMe { get; set; }
+
+        public PasskeyInputModel? Passkey { get; set; }
+    }
+}

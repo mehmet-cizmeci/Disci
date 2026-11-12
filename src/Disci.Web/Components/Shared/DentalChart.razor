@@ -1,0 +1,400 @@
+@using static Disci.Web.Services.ToothGeometry
+@* Realistic dental chart: every tooth seen from the cheek side with its crown and roots (upper roots up, lower roots
+   down) and, next to it, from above (occlusal view) for surface fillings. Treatments are drawn the way dental charts
+   usually show them: an implant screw instead of the root, filled canals, a coloured crown, bridge connectors, a cross
+   for a planned extraction, a faded outline for a missing tooth, filled surfaces. Colour = state (done / planned /
+   finding). The patient's right is on the left of the screen. Read-only by default; with Selectable it picks teeth. *@
+<div class="dchart-wrap">
+    @if (showTabs)
+    {
+        <div class="dchart-tabs" role="tablist">
+            <button type="button" class="@(deciduous ? "" : "active")" role="tab" aria-selected="@((!deciduous).ToString().ToLowerInvariant())" @onclick="() => deciduous = false">
+                Daimi dişler @if (CountOn(false) > 0) { <span class="chip ms-1">@CountOn(false)</span> }
+            </button>
+            <button type="button" class="@(deciduous ? "active" : "")" role="tab" aria-selected="@deciduous.ToString().ToLowerInvariant()" @onclick="() => deciduous = true">
+                Süt dişleri @if (CountOn(true) > 0) { <span class="chip ms-1">@CountOn(true)</span> }
+            </button>
+        </div>
+    }
+    @{ var L = Layout(deciduous); }
+    <svg class="dchart @(Selectable ? "selectable" : "")" viewBox="0 0 @N(L.W) @N(L.H)" role="group" aria-label="Diş şeması">
+        <defs>
+            <linearGradient id="enamel-@uid" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#ece4d3" /><stop offset=".45" stop-color="#fffdf8" /><stop offset="1" stop-color="#e6dcc6" />
+            </linearGradient>
+            <linearGradient id="root-@uid" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#e9d3a1" /><stop offset=".5" stop-color="#f7e8c4" /><stop offset="1" stop-color="#e2c993" />
+            </linearGradient>
+        </defs>
+
+        @* Gums along the necks of the teeth *@
+        <rect class="dc-gum" x="@N(L.Left - 6)" y="@N(L.UpperCervical - 16)" width="@N(L.Right - L.Left + 12)" height="20" rx="8" />
+        <rect class="dc-gum" x="@N(L.Left - 6)" y="@N(L.LowerCervical - 4)" width="@N(L.Right - L.Left + 12)" height="20" rx="8" />
+        <line class="dc-mid" x1="@N(L.W / 2)" y1="4" x2="@N(L.W / 2)" y2="@N(L.H - 4)" />
+        <text class="dc-side" x="6" y="@N((L.UpperNumberY + L.LowerNumberY) / 2 + 4)">SAĞ</text>
+        <text class="dc-side" x="@N(L.W - 6)" y="@N((L.UpperNumberY + L.LowerNumberY) / 2 + 4)" text-anchor="end">SOL</text>
+
+        @foreach (var t in L.Teeth)
+        {
+            var tooth = t;
+            var marks = Symbols?.GetValueOrDefault(tooth.Number) ?? [];
+            var css = $"dt {Css(tooth.Number)}";
+            <g>
+            <g class="@css" @onclick="() => Toggle(tooth.Number)"
+               tabindex="@(Selectable ? 0 : -1)" role="@(Selectable ? "button" : null)"
+               aria-pressed="@(Selectable ? Selected.Contains(tooth.Number).ToString().ToLowerInvariant() : null)"
+               aria-label="Diş @tooth.Number" @onkeydown="e => Key(e, tooth.Number)">
+                <title>@(Titles?.GetValueOrDefault(tooth.Number) ?? $"Diş {tooth.Number}")</title>
+                @* Invisible hit area so the gaps between roots are clickable too *@
+                <rect class="dc-hit" x="@N(tooth.X - tooth.Column / 2)" y="@N(tooth.Upper ? L.UpperCervical - L.UpperRoot : L.LowerOcclusalY - L.OcclusalSize / 2)"
+                      width="@N(tooth.Column)" height="@N(tooth.Upper ? L.UpperRoot + L.UpperCrown + L.OcclusalSize + 12 : L.LowerRoot + L.LowerCrown + L.OcclusalSize + 12)" />
+                @((MarkupString)SideMarkup(tooth, marks, L))
+                @((MarkupString)OcclusalMarkup(tooth, marks, L))
+            </g>
+            <text class="dc-num @Css(tooth.Number)" x="@N(tooth.X)" y="@N(tooth.Upper ? L.UpperNumberY : L.LowerNumberY)" text-anchor="middle">@tooth.Number</text>
+            </g>
+        }
+        @((MarkupString)ConnectorMarkup(L))
+    </svg>
+</div>
+@if (!Selectable && Symbols is { Count: > 0 })
+{
+    var used = Symbols.Values.SelectMany(l => l).Select(m => m.Key).Distinct().ToList();
+    <div class="sym-legend">
+        @foreach (var k in used)
+        {
+            <span class="sym-legend-item">@((MarkupString)ToothSymbols.Icon(k)) @ToothSymbols.Name(k)</span>
+        }
+        <span class="sym-legend-item ms-auto">
+            <span class="sym-swatch done"></span> Yapıldı
+            <span class="sym-swatch plan ms-2"></span> Planlı
+            <span class="sym-swatch finding ms-2"></span> Bulgu
+        </span>
+    </div>
+}
+@if (Selectable && Selected.Count > 0)
+{
+    <div class="d-flex flex-wrap align-items-center gap-3 mt-1 small">
+        <span class="text-secondary">Seçili: @string.Join(", ", Selected.Order())</span>
+        <button type="button" class="btn btn-sm btn-link p-0" @onclick="Clear">Temizle</button>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Selectable { get; set; }
+    [Parameter] public HashSet<int> Selected { get; set; } = [];
+    [Parameter] public EventCallback<HashSet<int>> SelectedChanged { get; set; }
+    /// <summary>Tooth → CSS classes (done, plan, finding) used for the tooth numbers.</summary>
+    [Parameter] public Dictionary<int, string>? Marks { get; set; }
+    [Parameter] public Dictionary<int, string>? Titles { get; set; }
+    [Parameter] public Dictionary<int, List<ToothMark>>? Symbols { get; set; }
+
+    private bool deciduous;
+    private readonly string uid = Guid.NewGuid().ToString("N")[..6];
+
+    private bool showTabs => Selectable || (Symbols?.Keys.Any(t => t > 50) ?? false) || (Marks?.Keys.Any(t => t > 50) ?? false);
+
+    private int CountOn(bool milk) => Symbols?.Keys.Count(t => (t > 50) == milk) ?? 0;
+
+    protected override void OnInitialized()
+    {
+        // Open on the primary teeth when the patient only has records there (a child).
+        if (Symbols is { Count: > 0 } s && s.Keys.All(t => t > 50)) deciduous = true;
+    }
+
+    public sealed record Tooth(int Number, Spec Spec, double X, double Column, bool Upper, bool RightSide);
+
+    public sealed record Plan(double W, double H, double Left, double Right, double Scale, double OcclusalScale,
+        double UpperCervical, double UpperRoot, double UpperCrown, double UpperOcclusalY,
+        double UpperNumberY, double LowerNumberY, double LowerOcclusalY, double LowerCervical, double LowerRoot, double LowerCrown,
+        double OcclusalSize, List<Tooth> Teeth);
+
+    /// <summary>Columns are aligned by position (16 above 46), each as wide as the wider of the two teeth.</summary>
+    private static Plan Layout(bool milk)
+    {
+        Spec[] up = milk ? UpperDeciduous : Upper, low = milk ? LowerDeciduous : Lower;
+        var s = milk ? 9.0 : 6.2;
+        var so = s * 0.6;
+        const double margin = 22, midGap = 10, gap = 2;
+        var cols = up.Select((u, i) => Math.Max(u.Width, low[i].Width) * s + gap).ToArray();
+        var half = cols.Sum();
+        var w = margin * 2 + midGap + half * 2;
+        var mid = w / 2;
+
+        var upperRoot = up.Max(t => t.RootLength) * s * 1.08;
+        var upperCrown = up.Max(t => t.CrownHeight) * s * 1.12;
+        var lowerRoot = low.Max(t => t.RootLength) * s * 1.08;
+        var lowerCrown = low.Max(t => t.CrownHeight) * s * 1.12;
+        var occ = up.Concat(low).Max(t => t.Width * DepthFactor(t.Kind)) * so;
+
+        var upperCervical = 8 + upperRoot;
+        var upperOcc = upperCervical + upperCrown + 8 + occ / 2;
+        var upperNum = upperOcc + occ / 2 + 15;
+        var lowerNum = upperNum + 20;
+        var lowerOcc = lowerNum + 8 + occ / 2;
+        var lowerCervical = lowerOcc + occ / 2 + 8 + lowerCrown;
+        var h = lowerCervical + lowerRoot + 8;
+
+        var teeth = new List<Tooth>();
+        int qUR = milk ? 5 : 1, qUL = milk ? 6 : 2, qLL = milk ? 7 : 3, qLR = milk ? 8 : 4;
+        double before = 0;
+        for (var i = 0; i < up.Length; i++)
+        {
+            var c = before + cols[i] / 2;
+            before += cols[i];
+            double xr = mid - midGap / 2 - c, xl = mid + midGap / 2 + c;
+            teeth.Add(new Tooth(qUR * 10 + i + 1, up[i], xr, cols[i], true, true));
+            teeth.Add(new Tooth(qUL * 10 + i + 1, up[i], xl, cols[i], true, false));
+            teeth.Add(new Tooth(qLR * 10 + i + 1, low[i], xr, cols[i], false, true));
+            teeth.Add(new Tooth(qLL * 10 + i + 1, low[i], xl, cols[i], false, false));
+        }
+        return new Plan(w, h, margin, w - margin, s, so, upperCervical, upperRoot, upperCrown, upperOcc,
+            upperNum, lowerNum, lowerOcc, lowerCervical, lowerRoot, lowerCrown, occ, teeth);
+    }
+
+    private static bool Has(List<ToothMark> m, string key) => m.Any(x => x.Key == key);
+    private static ToothMark? Get(List<ToothMark> m, string key) => m.LastOrDefault(x => x.Key == key);
+
+    /// <summary>A missing or extracted tooth is drawn as a faint outline (unless an implant or a bridge pontic replaces it).</summary>
+    private static bool Gone(List<ToothMark> m) => Has(m, "missing") || m.Any(x => x.Key == "extraction" && x.State == "done");
+
+    // ---- Side view -----------------------------------------------------------------------------------------------
+    private string SideMarkup(Tooth t, List<ToothMark> marks, Plan p)
+    {
+        var sv = Side(t.Spec, p.Scale);
+        double w = sv.Width, ch = sv.CrownHeight, rl = sv.RootLength;
+        var y = t.Upper ? p.UpperCervical : p.LowerCervical;
+        var mes = t.RightSide ? 1 : -1;     // mesial (towards the midline) is +x on the screen's left half
+        var clip = $"cc-{uid}-{t.Number}";
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<g transform=\"translate({N(t.X)} {N(y)}){(t.Upper ? "" : " scale(1,-1)")}\">");
+        if (Has(marks, "impacted")) sb.Append($"<g transform=\"translate(0 {N(-rl * 0.38)}) rotate({(t.RightSide ? 22 : -22)})\">");
+        sb.Append($"<clipPath id=\"{clip}\"><path d=\"{sv.Crown}\"/></clipPath>");
+
+        var gone = Gone(marks);
+        var implant = Get(marks, "implant");
+        var bridge = Get(marks, "bridge");
+        var pontic = gone && bridge is not null && implant is null;
+
+        // Roots (or the implant screw that replaces them)
+        if (implant is not null)
+            sb.Append(Screw(sv, implant.State));
+        else if (gone && !pontic)
+            foreach (var r in sv.Roots) sb.Append($"<path class=\"dc-ghost\" d=\"{r}\"/>");
+        else if (!pontic)
+            for (var i = 0; i < sv.Roots.Count; i++)
+                sb.Append($"<path class=\"dc-root{(sv.Roots.Count == 3 && i == 0 ? " back" : "")}\" d=\"{sv.Roots[i]}\" fill=\"url(#root-{uid})\"/>");
+
+        // Crown
+        if (gone && !pontic && implant is null)
+            sb.Append($"<path class=\"dc-ghost\" d=\"{sv.Crown}\"/>");
+        else if (gone && implant is not null && !Has(marks, "crown") && bridge is null)
+            // The tooth is gone and the implant does not carry a crown yet: show where the crown will go.
+            sb.Append($"<path class=\"m-{implant.State} dc-outline dashed\" d=\"{sv.Crown}\"/>");
+        else
+        {
+            sb.Append($"<path class=\"dc-crown\" d=\"{sv.Crown}\" fill=\"url(#enamel-{uid})\"/>");
+            if (sv.Groove is not null) sb.Append($"<path class=\"dc-groove\" d=\"{sv.Groove}\"/>");
+        }
+
+        // Treatments, drawn from the inside out
+        foreach (var m in marks.OrderBy(m => Order(m.Key)))
+        {
+            var c = $"m-{m.State}";
+            switch (m.Key)
+            {
+                case "rootcanal" when implant is null && !gone:
+                    sb.Append($"<ellipse class=\"{c} dc-fill\" cx=\"0\" cy=\"{N(ch * 0.28)}\" rx=\"{N(w * 0.12)}\" ry=\"{N(ch * 0.12)}\"/>");
+                    foreach (var canal in sv.Canals.Skip(sv.Canals.Count == 3 ? 1 : 0))
+                        sb.Append($"<path class=\"{c} dc-canal\" d=\"{canal}\"/>");
+                    break;
+                case "post" when !gone:
+                    sb.Append($"<rect class=\"{c} dc-fill\" x=\"{N(-w * 0.055)}\" y=\"{N(-rl * 0.6)}\" width=\"{N(w * 0.11)}\" height=\"{N(rl * 0.6 + ch * 0.3)}\" rx=\"{N(w * 0.05)}\"/>");
+                    break;
+                case "crown":
+                case "bridge":
+                    if (!gone || pontic || implant is not null)
+                        sb.Append($"<path class=\"{c} dc-cap\" d=\"{sv.Crown}\"/>");
+                    break;
+                case "veneer" when !gone:
+                    sb.Append($"<path class=\"{c} dc-cap\" d=\"{sv.Crown}\" transform=\"translate(0 {N(ch * 0.1)}) scale(.8)\"/>");
+                    break;
+                case "filling" when !gone:
+                case "caries" when !gone:
+                case "sealant" when !gone:
+                    sb.Append(SideSurfaces(m, w, ch, mes, clip));
+                    break;
+                case "fracture" when !gone:
+                    sb.Append($"<polyline class=\"{c} dc-line\" points=\"{N(-w * 0.4)},{N(ch * 0.45)} {N(-w * 0.12)},{N(ch * 0.7)} {N(w * 0.08)},{N(ch * 0.5)} {N(w * 0.4)},{N(ch * 0.82)}\"/>");
+                    break;
+                case "lesion":
+                    var (lx, ly) = sv.Apexes[sv.Apexes.Count == 3 ? 1 : 0];
+                    sb.Append($"<circle class=\"{c} dc-lesion\" cx=\"{N(lx)}\" cy=\"{N(ly)}\" r=\"{N(w * 0.2)}\"/>");
+                    break;
+                case "denture":
+                    sb.Append($"<rect class=\"dc-denture\" x=\"{N(-t.Column / 2)}\" y=\"{N(-ch * 0.18)}\" width=\"{N(t.Column)}\" height=\"{N(ch * 0.42)}\" rx=\"4\"/>");
+                    sb.Append($"<path class=\"{c} dc-outline\" d=\"{sv.Crown}\"/>");
+                    break;
+                case "ortho":
+                    sb.Append($"<rect class=\"{c} dc-fill\" x=\"{N(-w * 0.16)}\" y=\"{N(ch * 0.42)}\" width=\"{N(w * 0.32)}\" height=\"{N(ch * 0.2)}\" rx=\"1.5\"/>");
+                    break;
+                case "extraction" when m.State != "done":
+                    sb.Append($"<path class=\"{c} dc-x\" d=\"M{N(-w * 0.45)} {N(ch)} L{N(w * 0.45)} {N(-rl * 0.75)} M{N(w * 0.45)} {N(ch)} L{N(-w * 0.45)} {N(-rl * 0.75)}\"/>");
+                    break;
+                case "missing" or "extraction" when gone && !pontic && implant is null:
+                    sb.Append($"<path class=\"{c} dc-outline dashed\" d=\"{sv.Crown}\"/>");
+                    break;
+                case "other":
+                    sb.Append($"<circle class=\"{c} dc-fill\" cx=\"0\" cy=\"{N(ch * 0.55)}\" r=\"{N(w * 0.09)}\"/>");
+                    break;
+            }
+        }
+        if (Has(marks, "impacted")) sb.Append("</g>");
+        sb.Append("</g>");
+        return sb.ToString();
+    }
+
+    private static int Order(string key) => key switch
+    {
+        "rootcanal" or "post" => 0, "crown" or "bridge" or "veneer" => 1, "filling" or "caries" or "sealant" => 2,
+        "denture" => 3, _ => 4,
+    };
+
+    private string Screw(SideView sv, string state)
+    {
+        double top = 3, len = sv.RootLength * 0.88, wTop = sv.CervicalWidth * 0.62, wEnd = sv.CervicalWidth * 0.36;
+        var sb = new System.Text.StringBuilder($"<g class=\"m-{state}\">");
+        sb.Append($"<path class=\"dc-screw\" d=\"M{N(-wTop / 2)} {N(-top)} L{N(-wEnd / 2)} {N(-len)} Q0 {N(-len - wEnd * 0.5)} {N(wEnd / 2)} {N(-len)} L{N(wTop / 2)} {N(-top)}Z\"/>");
+        for (var y = top + 5.0; y < len - 2; y += 5.5)
+        {
+            var f = (y - top) / (len - top);
+            var hw = (wTop + (wEnd - wTop) * f) / 2;
+            sb.Append($"<line class=\"dc-thread\" x1=\"{N(-hw)}\" y1=\"{N(-y + 1.6)}\" x2=\"{N(hw)}\" y2=\"{N(-y - 1.6)}\"/>");
+        }
+        sb.Append($"<rect class=\"dc-screw\" x=\"{N(-wTop * 0.32)}\" y=\"{N(-top)}\" width=\"{N(wTop * 0.64)}\" height=\"{N(top + 2)}\"/>");
+        sb.Append("</g>");
+        return sb.ToString();
+    }
+
+    /// <summary>Fillings, caries and sealants on the side view: buccal = middle of the crown, occlusal = biting edge,
+    /// mesial / distal = the crown's sides. Without surfaces a patch in the middle of the crown.</summary>
+    private static string SideSurfaces(ToothMark m, double w, double ch, int mes, string clip)
+    {
+        var c = $"m-{m.State} {(m.Key == "caries" ? "dc-caries" : "dc-fill")}";
+        if (m.Key == "sealant")
+            return $"<path class=\"m-{m.State} dc-line\" d=\"M{N(-w * 0.3)} {N(ch * 0.93)} Q0 {N(ch * 0.85)} {N(w * 0.3)} {N(ch * 0.93)}\"/>";
+        var s = Surface.Parse(m.Surfaces);
+        if (s.Count == 0)
+            return $"<ellipse class=\"{c}\" cx=\"{N(m.Key == "caries" ? mes * w * 0.15 : 0)}\" cy=\"{N(ch * 0.62)}\" rx=\"{N(w * (m.Key == "caries" ? 0.13 : 0.22))}\" ry=\"{N(ch * 0.17)}\"/>";
+        var sb = new System.Text.StringBuilder($"<g clip-path=\"url(#{clip})\">");
+        foreach (var f in s)
+            sb.Append(f switch
+            {
+                'B' => $"<ellipse class=\"{c}\" cx=\"0\" cy=\"{N(ch * 0.5)}\" rx=\"{N(w * 0.22)}\" ry=\"{N(ch * 0.2)}\"/>",
+                'O' => $"<rect class=\"{c}\" x=\"{N(-w)}\" y=\"{N(ch * 0.8)}\" width=\"{N(w * 2)}\" height=\"{N(ch * 0.5)}\"/>",
+                'M' => $"<rect class=\"{c}\" x=\"{N(mes > 0 ? w * 0.24 : -w)}\" y=\"{N(ch * 0.25)}\" width=\"{N(w * 0.76)}\" height=\"{N(ch)}\"/>",
+                'D' => $"<rect class=\"{c}\" x=\"{N(mes > 0 ? -w : w * 0.24)}\" y=\"{N(ch * 0.25)}\" width=\"{N(w * 0.76)}\" height=\"{N(ch)}\"/>",
+                _ => "",   // lingual is not visible from the cheek side; the occlusal view shows it
+            });
+        sb.Append("</g>");
+        return sb.ToString();
+    }
+
+    // ---- Occlusal view -------------------------------------------------------------------------------------------
+    private string OcclusalMarkup(Tooth t, List<ToothMark> marks, Plan p)
+    {
+        var wo = t.Spec.Width * p.OcclusalScale;
+        var d = wo * DepthFactor(t.Spec.Kind);
+        var (shape, detail) = Occlusal(t.Spec.Kind, wo, d);
+        var y = t.Upper ? p.UpperOcclusalY : p.LowerOcclusalY;
+        var mes = t.RightSide ? 1 : -1;
+        var clip = $"oc-{uid}-{t.Number}";
+        var gone = Gone(marks) && !Has(marks, "implant") && !Has(marks, "bridge");
+        // Cheek side outwards: towards the top above, towards the bottom below.
+        var sb = new System.Text.StringBuilder($"<g transform=\"translate({N(t.X)} {N(y)}){(t.Upper ? "" : " scale(1,-1)")}\">");
+        sb.Append($"<clipPath id=\"{clip}\"><path d=\"{shape}\"/></clipPath>");
+        sb.Append(gone ? $"<path class=\"dc-ghost\" d=\"{shape}\"/>" : $"<path class=\"dc-occ\" d=\"{shape}\"/>");
+        if (!gone && detail is not null) sb.Append($"<path class=\"dc-groove\" d=\"{detail}\"/>");
+        foreach (var m in marks)
+        {
+            var c = $"m-{m.State}";
+            var s = Surface.Parse(m.Surfaces);
+            if (m.Key is "filling" or "caries" && s.Count > 0 && !gone)
+            {
+                var k = m.Key == "caries" ? "dc-caries" : "dc-fill";
+                sb.Append($"<g clip-path=\"url(#{clip})\">");
+                foreach (var f in s)
+                    sb.Append(f switch
+                    {
+                        'O' => $"<ellipse class=\"{c} {k}\" cx=\"0\" cy=\"0\" rx=\"{N(wo * 0.24)}\" ry=\"{N(d * 0.24)}\"/>",
+                        'B' => $"<rect class=\"{c} {k}\" x=\"{N(-wo)}\" y=\"{N(-d)}\" width=\"{N(wo * 2)}\" height=\"{N(d * 0.76)}\"/>",
+                        'L' => $"<rect class=\"{c} {k}\" x=\"{N(-wo)}\" y=\"{N(d * 0.24)}\" width=\"{N(wo * 2)}\" height=\"{N(d)}\"/>",
+                        'M' => $"<rect class=\"{c} {k}\" x=\"{N(mes > 0 ? wo * 0.24 : -wo)}\" y=\"{N(-d)}\" width=\"{N(wo * 0.76)}\" height=\"{N(d * 2)}\"/>",
+                        'D' => $"<rect class=\"{c} {k}\" x=\"{N(mes > 0 ? -wo : wo * 0.24)}\" y=\"{N(-d)}\" width=\"{N(wo * 0.76)}\" height=\"{N(d * 2)}\"/>",
+                        _ => "",
+                    });
+                sb.Append("</g>");
+            }
+            else if (m.Key is "filling" or "caries" or "sealant" or "crown" or "bridge" or "veneer" or "extraction" or "missing")
+            {
+                if (gone && m.Key is not ("missing" or "extraction")) continue;
+                sb.Append($"<g class=\"sym {m.State}\">{ToothSymbols.Svg(m.Key, wo, d, shape)}</g>");
+            }
+        }
+        sb.Append("</g>");
+        return sb.ToString();
+    }
+
+    // ---- Bridges and orthodontic wires join neighbouring teeth ---------------------------------------------------
+    private string ConnectorMarkup(Plan p)
+    {
+        if (Symbols is null || Symbols.Count == 0) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var upper in new[] { true, false })
+        {
+            var row = p.Teeth.Where(t => t.Upper == upper).OrderBy(t => t.X).ToList();
+            for (var i = 0; i + 1 < row.Count; i++)
+            {
+                var (a, b) = (row[i], row[i + 1]);
+                var ma = Symbols.GetValueOrDefault(a.Number);
+                var mb = Symbols.GetValueOrDefault(b.Number);
+                if (ma is null || mb is null) continue;
+                var ch = Math.Min(a.Spec.CrownHeight, b.Spec.CrownHeight) * p.Scale;
+                var cerv = upper ? p.UpperCervical : p.LowerCervical;
+                var dir = upper ? 1 : -1;
+                var xa = a.X + a.Spec.Width * p.Scale * 0.38;
+                var xb = b.X - b.Spec.Width * p.Scale * 0.38;
+                if (Get(ma, "bridge") is { } ba && Get(mb, "bridge") is not null)
+                {
+                    var y = cerv + dir * ch * 0.5;
+                    sb.Append($"<rect class=\"m-{ba.State} dc-connector\" x=\"{N(xa)}\" y=\"{N(y - ch * 0.12)}\" width=\"{N(xb - xa)}\" height=\"{N(ch * 0.24)}\" rx=\"2\"/>");
+                }
+                if (Get(ma, "ortho") is { } oa && Get(mb, "ortho") is not null)
+                {
+                    var y = cerv + dir * ch * 0.52;
+                    sb.Append($"<line class=\"m-{oa.State} dc-wire\" x1=\"{N(a.X)}\" y1=\"{N(y)}\" x2=\"{N(b.X)}\" y2=\"{N(y)}\"/>");
+                }
+            }
+        }
+        return sb.ToString();
+    }
+
+    private string Css(int t) => Selected.Contains(t) ? "sel" : Marks?.GetValueOrDefault(t) ?? "";
+
+    private async Task Toggle(int t)
+    {
+        if (!Selectable) return;
+        var next = new HashSet<int>(Selected);
+        if (!next.Remove(t)) next.Add(t);
+        Selected = next;
+        await SelectedChanged.InvokeAsync(next);
+    }
+
+    private Task Key(KeyboardEventArgs e, int t) => Selectable && e.Key is "Enter" or " " ? Toggle(t) : Task.CompletedTask;
+
+    private async Task Clear()
+    {
+        Selected = [];
+        await SelectedChanged.InvokeAsync(Selected);
+    }
+}

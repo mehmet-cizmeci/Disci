@@ -1,0 +1,306 @@
+@page "/randevular"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject NavigationManager Nav
+@inject ClinicEvents Events
+@inject CurrentUser Me
+
+<PageTitle>Randevular - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Randevular</h1>
+        <div class="sub">@appointments.Count(a => !Scheduling.Inactive.Contains(a.Status)) randevu · boş bir saate tıklayarak randevu verin</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="() => OpenNew(null, null)"><Icon Name="calendar-plus" /> Yeni randevu</button>
+    </div>
+</div>
+
+<div class="cal-toolbar">
+    <div class="btn-group">
+        <button class="btn btn-light btn-icon" title="Önceki" @onclick="() => Move(-1)"><Icon Name="chevron-left" /></button>
+        <button class="btn btn-light" @onclick="GoToday">Bugün</button>
+        <button class="btn btn-light btn-icon" title="Sonraki" @onclick="() => Move(1)"><Icon Name="chevron-right" /></button>
+    </div>
+    <input type="date" class="form-control" style="width:auto" @bind="day" @bind:after="Load" aria-label="Tarih" />
+    <span class="date-title">@Title</span>
+    <div class="ms-auto d-flex flex-wrap gap-2 align-items-center">
+        <select class="form-select" style="width:auto" @bind="dentistFilter" @bind:after="Load" aria-label="Hekim">
+            <option value="0">Tüm hekimler</option>
+            @foreach (var d in dentists)
+            {
+                <option value="@d.Id">@d.FullName</option>
+            }
+        </select>
+        <div class="seg">
+            <button class="@(week ? "" : "active")" @onclick="() => SetView(false)">Gün</button>
+            <button class="@(week ? "active" : "")" @onclick="() => SetView(true)">Hafta</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    @if (dentists.Count == 0)
+    {
+        <div class="empty"><Icon Name="users" /><div>Takvim için önce Klinik ayarları sayfasından hekim ekleyin.</div></div>
+    }
+    else
+    {
+        <div class="cal-wrap">
+            <div class="cal" style="grid-template-columns: 56px repeat(@Columns.Count, minmax(@(week ? 120 : 180)px, 1fr)); --hour:@(Px(HourPx))px">
+                <div class="cal-corner"></div>
+                @foreach (var c in Columns)
+                {
+                    <div class="cal-head @(c.Date == Today ? "today" : "")">
+                        @if (c.Dentist is { } d)
+                        {
+                            <span class="avatar avatar-sm" style="background:@Display.Color(d.CalendarColor, d.Id);color:#fff">@Display.Initials(d.FullName)</span>
+                            <span class="text-truncate">@d.FullName</span>
+                        }
+                        else
+                        {
+                            <span>@Display.ShortDay(c.Date)</span>
+                        }
+                        <span class="chip ms-auto">@ColumnItems(c).Count(a => !Scheduling.Inactive.Contains(a.Status))</span>
+                    </div>
+                }
+
+                <div class="cal-times" style="height:@(Px(TotalMinutes * PxPerMin))px">
+                    @for (var h = dayStart.Hour; h <= dayEnd.Hour; h++)
+                    {
+                        if (h == dayStart.Hour) continue;
+                        <div style="top:@(Px((h * 60 - StartMinute) * PxPerMin))px">@($"{h:00}:00")</div>
+                    }
+                </div>
+                @foreach (var c in Columns)
+                {
+                    var col = c;
+                    <div class="cal-col @(IsOff(col) ? "off" : "")" style="height:@(Px(TotalMinutes * PxPerMin))px" @onclick="e => SlotClicked(col, e)">
+                        @if (col.Date == Today && DateTime.Now.TimeOfDay.TotalMinutes is var nowMin && nowMin > StartMinute && nowMin < StartMinute + TotalMinutes)
+                        {
+                            <div class="cal-now" style="top:@(Px((nowMin - StartMinute) * PxPerMin))px"></div>
+                        }
+                        @foreach (var (a, lane, lanes) in Lay(ColumnItems(col)))
+                        {
+                            var top = Math.Max(0, (a.Start.TimeOfDay.TotalMinutes - StartMinute) * PxPerMin);
+                            var height = Math.Max(22, (a.End - a.Start).TotalMinutes * PxPerMin - 2);
+                            var width = 100.0 / lanes;
+                            <button type="button" class="appt st @Display.Css(a.Status)" @onclick="() => editId = a.Id" @onclick:stopPropagation="true"
+                                    style="top:@(Px(top))px;height:@(Px(height))px;left:calc(@(Px(lane * width))% + 3px);right:auto;width:calc(@(Px(width))% - 6px);--dc:@a.Color">
+                                <div class="t">@Display.Time(a.Start)–@Display.Time(a.End)</div>
+                                <div class="n">@a.Name</div>
+                                @if (height > 50)
+                                {
+                                    <div class="x">@(a.TypeName ?? a.Notes) @(week && dentistFilter == 0 ? $"· {a.DentistName}" : "")</div>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<div class="legend mt-3">
+    @foreach (var s in Display.StatusFlow)
+    {
+        <StatusBadge Status="s" />
+    }
+</div>
+
+@if (creating || editId is not null)
+{
+    <AppointmentEditor AppointmentId="editId" DefaultStart="newAt" DefaultDentistId="newDentist" DefaultPatient="newPatient"
+                       OnSaved="Saved" OnClose="CloseEditor" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tarih")] private string? DateParam { get; set; }
+    [SupplyParameterFromQuery(Name = "gorunum")] private string? ViewParam { get; set; }
+    [SupplyParameterFromQuery(Name = "yeni")] private int? NewParam { get; set; }
+    [SupplyParameterFromQuery(Name = "hasta")] private int? PatientParam { get; set; }
+
+    private const double PxPerMin = 1.6;
+    private double HourPx => 60 * PxPerMin;
+
+    private DateOnly day;
+    private bool week;
+    private int dentistFilter;
+    private List<Dentist> dentists = [];
+    private List<Item> appointments = [];
+    private TimeOnly dayStart = Scheduling.DefaultDayStart, dayEnd = Scheduling.DefaultDayEnd;
+
+    private bool creating;
+    private DateTime? newAt;
+    private int? newDentist, editId;
+    private PatientPicker.PatientOption? newPatient;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private int StartMinute => dayStart.Hour * 60 + dayStart.Minute;
+    private int TotalMinutes => (int)(dayEnd - dayStart).TotalMinutes;
+    private DateOnly WeekStart => day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+
+    private sealed record Column(DateOnly Date, Dentist? Dentist);
+
+    private sealed record Item(int Id, int DentistId, string DentistName, DateTime Start, DateTime End, AppointmentStatus Status,
+        string Name, string? TypeName, string? Notes, string Color);
+
+    private string Title => week
+        ? $"{Display.MonthDay(WeekStart)} – {Display.MonthDay(WeekStart.AddDays(6))}"
+        : Display.LongDate(day);
+
+    private List<Column> Columns => week
+        ? Enumerable.Range(0, 7).Select(i => new Column(WeekStart.AddDays(i), null)).ToList()
+        : dentists.Where(d => dentistFilter == 0 || d.Id == dentistFilter).Select(d => new Column(day, d)).ToList();
+
+    private IEnumerable<Item> ColumnItems(Column c) => appointments.Where(a =>
+        DateOnly.FromDateTime(a.Start) == c.Date && (c.Dentist is null || a.DentistId == c.Dentist.Id));
+
+    private bool IsOff(Column c) => c.Date.DayOfWeek == DayOfWeek.Sunday;
+
+    private static string Px(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        day = DateOnly.TryParse(DateParam, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : Today;
+        week = ViewParam == "hafta";
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            dentists = await db.Dentists.AsNoTracking().Visible(await Me.AccessAsync()).Where(x => x.IsActive).OrderBy(x => x.FullName).ToListAsync();
+            // Dentists open on their own column; the front desk sees everyone.
+            if (await Me.IsInAnyRoleAsync(Roles.Dentist) && await Me.DentistIdAsync() is { } mine && dentists.Any(x => x.Id == mine))
+                dentistFilter = mine;
+            if (PatientParam is { } pid)
+                newPatient = await db.Patients.Where(p => p.Id == pid)
+                    .Select(p => new PatientPicker.PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId, p.SecondProtocol))
+                    .FirstOrDefaultAsync();
+        }
+
+        // Day bounds follow the dentists' working hours, with an hour of room either side.
+        if (dentists.Any(x => x.WorkStart is not null))
+            dayStart = new TimeOnly(Math.Max(0, dentists.Where(x => x.WorkStart is not null).Min(x => x.WorkStart!.Value).Hour - 1), 0);
+        if (dentists.Any(x => x.WorkEnd is not null))
+            dayEnd = new TimeOnly(Math.Min(23, dentists.Where(x => x.WorkEnd is not null).Max(x => x.WorkEnd!.Value).Hour + 1), 0);
+
+        await Load();
+        if (NewParam == 1 || newPatient is not null)
+            OpenNew(null, null);
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) Events.Changed += OnChanged;
+    }
+
+    private Task OnChanged() => InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    private async Task Load()
+    {
+        var from = (week ? WeekStart : day).ToDateTime(TimeOnly.MinValue);
+        var to = from.AddDays(week ? 7 : 1);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var rows = await db.Appointments.AsNoTracking().Visible(await Me.AccessAsync())
+            .Where(a => a.Start >= from && a.Start < to && (dentistFilter == 0 || a.DentistId == dentistFilter))
+            .Select(a => new
+            {
+                a.Id, a.DentistId, Dentist = a.Dentist.FullName, a.Dentist.CalendarColor, a.Start, a.End, a.Status, a.Notes,
+                Name = a.Patient == null ? a.GuestName : a.Patient.FirstName + " " + a.Patient.LastName,
+                Type = a.AppointmentType == null ? null : a.AppointmentType.Name,
+            })
+            .OrderBy(a => a.Start)
+            .ToListAsync();
+        appointments = rows.Select(a => new Item(a.Id, a.DentistId, a.Dentist, a.Start, a.End, a.Status, a.Name ?? "", a.Type, a.Notes,
+            Display.Color(a.CalendarColor, a.DentistId))).ToList();
+
+        // Keep the address bar shareable without reloading the page (only once interactive: during
+        // prerendering a navigation would turn into a redirect).
+        if (RendererInfo.IsInteractive)
+            Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["tarih"] = day.ToString("yyyy-MM-dd"),
+            ["gorunum"] = week ? "hafta" : null,
+            ["yeni"] = null,
+            ["hasta"] = null,
+        }), replace: true);
+    }
+
+    /// <summary>Side-by-side lanes for overlapping appointments in one column.</summary>
+    private static IEnumerable<(Item Item, int Lane, int Lanes)> Lay(IEnumerable<Item> items)
+    {
+        var sorted = items.OrderBy(a => a.Start).ThenByDescending(a => a.End).ToList();
+        var result = new List<(Item, int, int)>();
+        var cluster = new List<(Item Item, int Lane)>();
+        var clusterEnd = DateTime.MinValue;
+
+        void Flush()
+        {
+            var lanes = cluster.Count == 0 ? 1 : cluster.Max(c => c.Lane) + 1;
+            result.AddRange(cluster.Select(c => (c.Item, c.Lane, lanes)));
+            cluster.Clear();
+        }
+
+        foreach (var a in sorted)
+        {
+            if (a.Start >= clusterEnd) Flush();
+            var lane = 0;
+            while (cluster.Any(c => c.Lane == lane && c.Item.End > a.Start)) lane++;
+            cluster.Add((a, lane));
+            if (a.End > clusterEnd) clusterEnd = a.End;
+        }
+        Flush();
+        return result;
+    }
+
+    private void SlotClicked(Column c, MouseEventArgs e)
+    {
+        // Snap the click to the 15-minute grid.
+        var minutes = StartMinute + (int)(e.OffsetY / PxPerMin) / 15 * 15;
+        OpenNew(c.Date.ToDateTime(new TimeOnly(Math.Clamp(minutes / 60, 0, 23), minutes % 60)), c.Dentist?.Id ?? (dentistFilter == 0 ? null : dentistFilter));
+    }
+
+    private void OpenNew(DateTime? at, int? dentistId)
+    {
+        editId = null;
+        creating = true;
+        newDentist = dentistId;
+        // Null lets the editor pick the next quarter hour from now.
+        newAt = at ?? (day == Today ? null : day.ToDateTime(new TimeOnly(9, 0)));
+    }
+
+    private void CloseEditor()
+    {
+        creating = false;
+        newAt = null;
+        editId = null;
+        newPatient = null;
+    }
+
+    private async Task Saved()
+    {
+        CloseEditor();
+        await Load();
+    }
+
+    private async Task Move(int direction)
+    {
+        day = day.AddDays(direction * (week ? 7 : 1));
+        await Load();
+    }
+
+    private async Task GoToday()
+    {
+        day = Today;
+        await Load();
+    }
+
+    private async Task SetView(bool w)
+    {
+        week = w;
+        await Load();
+    }
+
+    public void Dispose() => Events.Changed -= OnChanged;
+}

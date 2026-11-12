@@ -1,0 +1,32 @@
+@page "/Account/Manage/Paylasim"
+
+@inject CurrentUser Me
+@inject ClinicInfo Clinic
+
+<PageTitle>Kayıtlarımı kimler görür - Disci</PageTitle>
+
+<h3 class="h5">Kayıtlarımı kimler görür</h3>
+
+@if (dentistId is null)
+{
+    <p class="text-secondary">Hesabınız bir hekim kaydına bağlı değil. Bu ayar yalnızca hekim hesaplarında vardır.</p>
+}
+else if (!allowed)
+{
+    <div class="callout callout-info"><Icon Name="alert" /> Klinikte bu ayarı yalnızca yönetici değiştirebilir (Klinik ayarları → Hekimler).</div>
+}
+else
+{
+    <SharingEditor @rendermode="InteractiveServer" DentistId="dentistId.Value" />
+}
+
+@code {
+    private int? dentistId;
+    private bool allowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dentistId = await Me.DentistIdAsync();
+        allowed = await Me.IsInAnyRoleAsync(Disci.Infrastructure.Identity.Roles.Admin) || (await Clinic.GetAsync()).DentistsManageOwnSharing;
+    }
+}

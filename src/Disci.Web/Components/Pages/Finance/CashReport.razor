@@ -1,0 +1,233 @@
+@page "/kasa"
+@attribute [Authorize(Roles = $"{Roles.Admin},{Roles.Dentist}")]
+@rendermode InteractiveServer
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject CurrentUser Me
+
+<PageTitle>Kasa ve tahsilat - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Kasa ve tahsilat</h1>
+        <div class="sub">@Display.Date(from) – @Display.Date(to)</div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-light" onclick="window.print()"><Icon Name="printer" /> Yazdır</button>
+    </div>
+</div>
+
+<div class="panel mb-4 no-print">
+    <div class="panel-body d-flex flex-wrap gap-2 align-items-center">
+        @foreach (var (key, title) in Presets)
+        {
+            <button class="chip @(preset == key ? "active" : "")" @onclick="() => ApplyPreset(key)">@title</button>
+        }
+        <div class="d-flex gap-2 align-items-center ms-md-auto">
+            <input type="date" class="form-control" style="width:auto" @bind="from" @bind:after="Custom" aria-label="Başlangıç" />
+            <span class="text-secondary">–</span>
+            <input type="date" class="form-control" style="width:auto" @bind="to" @bind:after="Custom" aria-label="Bitiş" />
+        </div>
+    </div>
+</div>
+
+@if (report is null)
+{
+    <p class="text-secondary">Yükleniyor...</p>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3"><Kpi Title="Bugünkü tahsilat" Value="@Display.Money(report.CollectedToday)" IconName="cash" Tone="success" Hint="Tarih seçiminden bağımsız" /></div>
+        <div class="col-6 col-xl-3"><Kpi Title="Toplam alacak" Value="@Display.Money(report.TotalReceivable)" IconName="wallet" Tone="danger" Hint="Bütün hastaların kalan borcu" /></div>
+    </div>
+    <h2 class="h6 text-secondary mb-2">Seçilen aralık</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3"><Kpi Title="Tahsilat" Value="@Display.Money(report.Collected)" IconName="cash" Tone="success" Hint="@($"{report.Payments.Count} ödeme")" /></div>
+        <div class="col-6 col-xl-3"><Kpi Title="Yapılan tedavi" Value="@Display.Money(report.Produced)" IconName="tooth" Hint="@($"{report.Visits} seans")" /></div>
+        <div class="col-6 col-xl-3"><Kpi Title="Gider" Value="@Display.Money(report.Expenses)" IconName="receipt" Tone="warning" /></div>
+        <div class="col-6 col-xl-3"><Kpi Title="Net (tahsilat − gider)" Value="@Display.Money(report.Collected - report.Expenses)" IconName="trend" Tone="@(report.Collected >= report.Expenses ? "info" : "danger")" /></div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8 d-flex flex-column gap-4">
+            <div class="panel panel-flush">
+                <div class="panel-head"><Icon Name="list" /><h2>Tahsilatlar</h2></div>
+                @if (report.Payments.Count == 0)
+                {
+                    <div class="empty py-4">Bu aralıkta tahsilat yok.</div>
+                }
+                else
+                {
+                    <div class="table-responsive" style="max-height:520px">
+                        <table class="table table-hover align-middle">
+                            <thead><tr><th>Tarih</th><th>Hasta</th><th>Şekli</th><th>Açıklama</th><th class="text-end">Tutar</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in report.Payments)
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@Display.Date(p.Date)</td>
+                                        <td>@if (p.Visible) { <a href="hastalar/@p.PatientId">@p.Name</a> } else { <span class="text-secondary">Başka bir hekimin hastası</span> }</td>
+                                        <td><span class="chip">@Display.Name(p.Method)</span></td>
+                                        <td class="text-secondary">@p.Description</td>
+                                        <td class="text-end tabular text-nowrap fw-650">@Display.Money(p.Amount)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><td colspan="4">Toplam</td><td class="text-end tabular">@Display.Money(report.Collected)</td></tr></tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="panel panel-flush">
+                <div class="panel-head"><Icon Name="calendar" /><h2>Günlük döküm</h2></div>
+                <div class="table-responsive" style="max-height:420px">
+                    <table class="table align-middle">
+                        <thead><tr><th>Gün</th><th class="text-end">Nakit</th><th class="text-end">Kart</th><th class="text-end">Diğer</th><th class="text-end">Toplam</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in report.Payments.GroupBy(p => p.Date).OrderByDescending(g => g.Key))
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@Display.ShortDay(d.Key)</td>
+                                    <td class="text-end tabular">@Display.Money(d.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount))</td>
+                                    <td class="text-end tabular">@Display.Money(d.Where(p => p.Method == PaymentMethod.CreditCard).Sum(p => p.Amount))</td>
+                                    <td class="text-end tabular">@Display.Money(d.Where(p => p.Method is not (PaymentMethod.Cash or PaymentMethod.CreditCard)).Sum(p => p.Amount))</td>
+                                    <td class="text-end tabular fw-650">@Display.Money(d.Sum(p => p.Amount))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 d-flex flex-column gap-4">
+            <div class="panel">
+                <div class="panel-head"><Icon Name="wallet" /><h2>Ödeme şekline göre</h2></div>
+                <div class="panel-body d-flex flex-column gap-3">
+                    @foreach (var g in report.Payments.GroupBy(p => p.Method).OrderByDescending(g => g.Sum(p => p.Amount)))
+                    {
+                        var sum = g.Sum(p => p.Amount);
+                        var pct = report.Collected == 0 ? 0 : sum / report.Collected * 100;
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="fw-650">@Display.Name(g.Key)</span>
+                                <span class="tabular">@Display.Money(sum) · %@pct.ToString("0")</span>
+                            </div>
+                            <div class="fin-bar" style="background:var(--c-surface-2)"><span style="width:@pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                        </div>
+                    }
+                    @if (report.Payments.Count == 0) { <div class="text-secondary small">—</div> }
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head"><Icon Name="tooth" /><h2>Hekime göre tedavi</h2></div>
+                <div class="list">
+                    @foreach (var d in report.ByDentist)
+                    {
+                        <div class="list-row">
+                            <span class="grow title">@d.Name</span>
+                            <span class="tabular fw-650">@Display.Money(d.Amount)</span>
+                        </div>
+                    }
+                    @if (report.ByDentist.Count == 0) { <div class="empty py-3">—</div> }
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <Icon Name="alert" /><h2>En yüksek alacaklar</h2>
+                    <div class="actions"><a href="hastalar?filtre=borclu" class="small">Tümü</a></div>
+                </div>
+                <div class="list">
+                    @foreach (var r in report.Debtors)
+                    {
+                        <a class="list-row" href="hastalar/@r.Id">
+                            <span class="avatar avatar-sm">@Display.Initials(r.Name)</span>
+                            <span class="grow title">@r.Name</span>
+                            <span class="tabular fw-650 money-neg">@Display.Money(r.Amount)</span>
+                        </a>
+                    }
+                </div>
+                <div class="px-3 py-2 small text-secondary border-top">Toplam alacak: <span class="fw-650 text-body">@Display.Money(report.TotalReceivable)</span></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateOnly from, to;
+    private string preset = "ay";
+    private Report? report;
+
+    private static readonly (string Key, string Title)[] Presets =
+        [("bugun", "Bugün"), ("dun", "Dün"), ("hafta", "Bu hafta"), ("ay", "Bu ay"), ("gecenay", "Geçen ay"), ("yil", "Bu yıl")];
+
+    private sealed record PaymentRow(DateOnly Date, int PatientId, string Name, PaymentMethod Method, string? Description, decimal Amount, bool Visible);
+    private sealed record Named(int Id, string Name, decimal Amount);
+    private sealed record Report(List<PaymentRow> Payments, decimal Collected, decimal Produced, int Visits, decimal Expenses,
+        List<Named> ByDentist, List<Named> Debtors, decimal TotalReceivable, decimal CollectedToday);
+
+    protected override async Task OnInitializedAsync() => await ApplyPreset("ay");
+
+    private async Task ApplyPreset(string key)
+    {
+        preset = key;
+        var t = DateOnly.FromDateTime(DateTime.Today);
+        (from, to) = key switch
+        {
+            "bugun" => (t, t),
+            "dun" => (t.AddDays(-1), t.AddDays(-1)),
+            "hafta" => (t.AddDays(-(((int)t.DayOfWeek + 6) % 7)), t),
+            "gecenay" => (new DateOnly(t.Year, t.Month, 1).AddMonths(-1), new DateOnly(t.Year, t.Month, 1).AddDays(-1)),
+            "yil" => (new DateOnly(t.Year, 1, 1), t),
+            _ => (new DateOnly(t.Year, t.Month, 1), t),
+        };
+        await Load();
+    }
+
+    private async Task Custom()
+    {
+        preset = "";
+        if (to < from) (from, to) = (to, from);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var access = await Me.AccessAsync();
+        var payments = (await db.Payments.AsNoTracking()
+            .Where(p => p.Date >= from && p.Date <= to && !p.IsCancelled && p.Currency == Currencies.Try)
+            .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
+            .Select(p => new { p.Date, p.PatientId, Name = p.Patient.FirstName + " " + p.Patient.LastName, p.Patient.PrimaryDentistId, p.Method, p.Description, p.Amount })
+            .ToListAsync())
+            .Select(p => new PaymentRow(p.Date, p.PatientId, p.Name, p.Method, p.Description, p.Amount, access.CanSee(p.PrimaryDentistId))).ToList();
+
+        var done = db.TreatmentItems.Where(i => i.TreatmentSession.Kind == TreatmentKind.Completed && i.TreatmentSession.Date >= from
+                                                && i.TreatmentSession.Date <= to && i.Currency == Currencies.Try);
+        var byDentist = await done
+            .GroupBy(i => new { i.TreatmentSession.DentistId, Name = i.TreatmentSession.Dentist == null ? null : i.TreatmentSession.Dentist.FullName })
+            .Select(g => new { g.Key.DentistId, g.Key.Name, Amount = g.Sum(i => i.Price) })
+            .ToListAsync();
+
+        var debtors = Ledger.Balances(db).Where(b => b.Charged - b.Paid > 0);
+        var top = await debtors.OrderByDescending(b => b.Charged - b.Paid).Take(10)
+            .Join(db.Patients.Visible(access), b => b.PatientId, p => p.Id, (b, p) => new { p.Id, p.FirstName, p.LastName, Amount = b.Charged - b.Paid })
+            .ToListAsync();
+
+        report = new Report(
+            payments,
+            payments.Sum(p => p.Amount),
+            byDentist.Sum(d => d.Amount),
+            await db.TreatmentSessions.CountAsync(s => s.Kind == TreatmentKind.Completed && s.Date >= from && s.Date <= to),
+            await db.Expenses.Where(e => e.Date >= from && e.Date <= to && e.Currency == Currencies.Try).SumAsync(e => (decimal?)e.Amount) ?? 0,
+            byDentist.GroupBy(d => access.CanSee(d.DentistId) ? (d.DentistId ?? 0, d.Name ?? "Hekim belirtilmemiş") : (-1, "Diğer hekimler"))
+                .Select(g => new Named(g.Key.Item1, g.Key.Item2, g.Sum(d => d.Amount))).OrderByDescending(d => d.Amount).ToList(),
+            top.Select(t => new Named(t.Id, $"{t.FirstName} {t.LastName}", t.Amount)).ToList(),
+            await debtors.SumAsync(b => (decimal?)(b.Charged - b.Paid)) ?? 0,
+            await db.Payments.Where(p => p.Date == today && !p.IsCancelled && p.Currency == Currencies.Try).SumAsync(p => (decimal?)p.Amount) ?? 0);
+    }
+}

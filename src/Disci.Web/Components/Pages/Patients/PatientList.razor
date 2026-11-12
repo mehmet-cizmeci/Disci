@@ -1,0 +1,193 @@
+@page "/hastalar"
+@rendermode InteractiveServer
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject CurrentUser Me
+
+<PageTitle>Hastalar - Disci</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Hastalar</h1>
+        <div class="sub">@total.ToString("N0") hasta listeleniyor</div>
+    </div>
+    <div class="actions">
+        <a href="hastalar/yeni" class="btn btn-primary"><Icon Name="user-plus" /> Yeni hasta</a>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-body d-flex flex-wrap gap-2 align-items-center border-bottom">
+        <div class="input-icon flex-grow-1" style="min-width:240px;max-width:520px">
+            <Icon Name="search" />
+            <input class="form-control" placeholder="Ad, soyad, telefon veya protokol no" aria-label="Hasta ara"
+                   @bind="search" @bind:event="oninput" @bind:after="Refresh" />
+        </div>
+        <div class="d-flex flex-wrap gap-1 ms-md-auto">
+            @foreach (var (key, title) in Filters)
+            {
+                <button class="chip @(filter == key ? "active" : "")" @onclick="() => SetFilter(key)">@title</button>
+            }
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <QuickGrid @ref="grid" ItemsProvider="provider" Pagination="pagination" Class="table table-hover align-middle mb-0">
+            <TemplateColumn Title="Hasta" SortBy="byName">
+                <a href="hastalar/@context.Id" class="d-flex align-items-center gap-2 text-body">
+                    <span class="avatar avatar-sm">@Display.Initials(context.FirstName + " " + context.LastName)</span>
+                    <span>
+                        <span class="fw-650">@context.FirstName @context.LastName</span>
+                        @if (context.IsArchived) { <span class="chip chip-muted ms-1">Arşiv</span> }
+                        <span class="d-block small text-secondary">@Display.Protocol(context.Id, context.LegacyId, context.SecondProtocol)</span>
+                    </span>
+                </a>
+            </TemplateColumn>
+            <TemplateColumn Title="Telefon">
+                @if (context.MobilePhone is not null)
+                {
+                    <a href="tel:@context.MobilePhone" class="text-nowrap">@context.MobilePhone</a>
+                }
+            </TemplateColumn>
+            <TemplateColumn Title="Yaş" SortBy="byBirth">@Display.Age(context.BirthDate)</TemplateColumn>
+            <TemplateColumn Title="Son tedavi" SortBy="byLastVisit"><span class="text-nowrap">@Display.Date(context.LastVisit)</span></TemplateColumn>
+            <TemplateColumn Title="Kalan" SortBy="byBalance" Align="Align.End">
+                @if (context.Balance > 0)
+                {
+                    <span class="fw-650 money-neg text-nowrap tabular">@Display.Money(context.Balance)</span>
+                }
+                else if (context.Balance < 0)
+                {
+                    <span class="money-pos text-nowrap tabular" title="Fazla ödeme">@Display.Money(-context.Balance) alacaklı</span>
+                }
+                else
+                {
+                    <span class="text-secondary">—</span>
+                }
+            </TemplateColumn>
+        </QuickGrid>
+    </div>
+    <Paginator State="pagination">
+        <SummaryTemplate>
+            <span>@total.ToString("N0") hasta · sayfa @(pagination.CurrentPageIndex + 1) / @((pagination.LastPageIndex ?? 0) + 1)</span>
+        </SummaryTemplate>
+    </Paginator>
+</div>
+
+@code {
+    private QuickGrid<Row>? grid;
+    private GridItemsProvider<Row> provider = default!;
+    private readonly PaginationState pagination = new() { ItemsPerPage = 25 };
+    private string? search;
+    private string filter = "aktif";
+    private int total;
+    private AccessScope access = AccessScope.Everything;
+
+    private static readonly (string Key, string Title)[] Filters =
+        [("aktif", "Aktif"), ("borclu", "Borçlu"), ("arsiv", "Arşiv"), ("tumu", "Tümü")];
+
+    private readonly GridSort<Row> byName = GridSort<Row>.ByAscending(r => r.LastName).ThenAscending(r => r.FirstName);
+    private readonly GridSort<Row> byBirth = GridSort<Row>.ByDescending(r => r.BirthDate);
+    private readonly GridSort<Row> byLastVisit = GridSort<Row>.ByDescending(r => r.LastVisit);
+    private readonly GridSort<Row> byBalance = GridSort<Row>.ByDescending(r => r.Balance);
+
+    public sealed class Row
+    {
+        public int Id { get; init; }
+        public int? LegacyId { get; init; }
+        public int? SecondProtocol { get; init; }
+        public string FirstName { get; init; } = "";
+        public string LastName { get; init; } = "";
+        public string? MobilePhone { get; init; }
+        public DateOnly? BirthDate { get; init; }
+        public DateOnly? LastVisit { get; init; }
+        public decimal Balance { get; init; }
+        public bool IsArchived { get; init; }
+    }
+
+    [SupplyParameterFromQuery(Name = "ara")]
+    private string? InitialSearch { get; set; }
+
+    [SupplyParameterFromQuery(Name = "filtre")]
+    private string? InitialFilter { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        access = await Me.AccessAsync();
+        search = InitialSearch;
+        if (Filters.Any(f => f.Key == InitialFilter)) filter = InitialFilter!;
+        // Each request gets its own short-lived context: typing fires overlapping requests, and QuickGrid
+        // cancels the stale ones through the token. A shared context throws on the second concurrent query.
+        provider = async request =>
+        {
+            try
+            {
+                return await LoadPage(request);
+            }
+            // SqlClient reports a cancelled command as SqlException, not OperationCanceledException. QuickGrid only
+            // ignores the latter; anything else ends the circuit and the whole page stops responding.
+            catch (Exception) when (request.CancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(request.CancellationToken);
+            }
+        };
+    }
+
+    private async Task<GridItemsProviderResult<Row>> LoadPage(GridItemsProviderRequest<Row> request)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync(request.CancellationToken);
+        var query = BuildQuery(db);
+        var count = await query.CountAsync(request.CancellationToken);
+        if (count != total)
+        {
+            total = count;
+            // The header sits outside the grid, which only re-renders itself.
+            _ = InvokeAsync(StateHasChanged);
+        }
+        var items = await request.ApplySorting(query)
+            .Skip(request.StartIndex)
+            .Take(request.Count ?? pagination.ItemsPerPage)
+            .ToListAsync(request.CancellationToken);
+        return GridItemsProviderResult.From(items, count);
+    }
+
+    private IQueryable<Row> BuildQuery(DisciDbContext db)
+    {
+        var q = PatientSearch.Apply(db.Patients.AsNoTracking().Visible(access), search);
+        q = filter switch
+        {
+            "arsiv" => q.Where(p => p.IsArchived),
+            "tumu" => q,
+            _ => q.Where(p => !p.IsArchived),
+        };
+
+        var rows = q.OrderBy(p => p.LastName).ThenBy(p => p.FirstName).Select(p => new Row
+        {
+            Id = p.Id,
+            LegacyId = p.LegacyId,
+            SecondProtocol = p.SecondProtocol,
+            FirstName = p.FirstName,
+            LastName = p.LastName,
+            MobilePhone = p.MobilePhone,
+            BirthDate = p.BirthDate,
+            LastVisit = p.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed).Max(s => (DateOnly?)s.Date),
+            Balance = (p.TreatmentSessions.Where(s => s.Kind == TreatmentKind.Completed).SelectMany(s => s.Items)
+                           .Where(i => i.Currency == Currencies.Try).Sum(i => (decimal?)i.Price) ?? 0)
+                      - (p.Payments.Where(x => !x.IsCancelled && x.Currency == Currencies.Try).Sum(x => (decimal?)x.Amount) ?? 0),
+            IsArchived = p.IsArchived,
+        });
+        return filter == "borclu" ? rows.Where(r => r.Balance > 0).OrderByDescending(r => r.Balance) : rows;
+    }
+
+    private async Task SetFilter(string key)
+    {
+        filter = key;
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        await pagination.SetCurrentPageIndexAsync(0);
+        if (grid is not null)
+            await grid.RefreshDataAsync();
+    }
+}

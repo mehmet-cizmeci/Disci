@@ -1,0 +1,96 @@
+@inject IDbContextFactory<DisciDbContext> DbFactory
+@inject CurrentUser Me
+
+@if (Selected is { } s)
+{
+    <div class="picker-selected">
+        <span class="avatar avatar-sm">@Display.Initials(s.Name)</span>
+        <div class="flex-grow-1 min-w-0">
+            <div class="fw-650 text-truncate">@s.Name</div>
+            <div class="small text-secondary">@s.Phone</div>
+        </div>
+        <button type="button" class="btn btn-light btn-sm" @onclick="Clear">Değiştir</button>
+    </div>
+}
+else
+{
+    <div class="picker">
+        <div class="input-icon">
+            <Icon Name="search" />
+            <input class="form-control" placeholder="Ad, soyad, telefon veya protokol no" aria-label="Hasta ara" autocomplete="off"
+                   @bind="term" @bind:event="oninput" @bind:after="Search" @onkeydown="OnKey" />
+        </div>
+        @if (results.Count > 0)
+        {
+            <div class="picker-menu">
+                @for (var i = 0; i < results.Count; i++)
+                {
+                    var r = results[i];
+                    <button type="button" class="@(i == focus ? "focus" : "")" @onclick="() => Pick(r)">
+                        <span class="avatar avatar-sm">@Display.Initials(r.Name)</span>
+                        <span class="flex-grow-1 min-w-0">
+                            <span class="d-block fw-650 text-truncate">@r.Name</span>
+                            <span class="d-block small text-secondary">@r.Phone @(r.LegacyId is null ? "" : $"· #{r.LegacyId}") @(r.SecondProtocol is null ? "" : $"· 2. kart #{r.SecondProtocol}")</span>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public PatientOption? Selected { get; set; }
+    [Parameter] public EventCallback<PatientOption?> SelectedChanged { get; set; }
+
+    private string? term;
+    private List<PatientOption> results = [];
+    private int focus;
+    private CancellationTokenSource? cts;
+
+    public sealed record PatientOption(int Id, string Name, string? Phone, int? LegacyId, int? SecondProtocol = null);
+
+    private async Task Search()
+    {
+        cts?.Cancel();
+        cts = new CancellationTokenSource();
+        var token = cts.Token;
+        var t = term?.Trim();
+        if (string.IsNullOrEmpty(t) || t.Length < 2)
+        {
+            results = [];
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync(token);
+            var access = await Me.AccessAsync();
+            results = await PatientSearch.Apply(db.Patients.AsNoTracking().Visible(access).Where(p => !p.IsArchived), t)
+                .OrderBy(p => p.LastName).ThenBy(p => p.FirstName)
+                .Take(8)
+                .Select(p => new PatientOption(p.Id, p.FirstName + " " + p.LastName, p.MobilePhone, p.LegacyId, p.SecondProtocol))
+                .ToListAsync(token);
+            focus = 0;
+        }
+        // A newer keystroke cancelled this search; SqlClient reports that as SqlException, not OperationCanceledException.
+        catch (Exception) when (token.IsCancellationRequested) { }
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (results.Count == 0) return;
+        if (e.Key == "ArrowDown") focus = Math.Min(focus + 1, results.Count - 1);
+        else if (e.Key == "ArrowUp") focus = Math.Max(focus - 1, 0);
+        else if (e.Key == "Enter") await Pick(results[focus]);
+    }
+
+    private async Task Pick(PatientOption p)
+    {
+        results = [];
+        term = null;
+        await SelectedChanged.InvokeAsync(p);
+    }
+
+    private Task Clear() => SelectedChanged.InvokeAsync(null);
+}

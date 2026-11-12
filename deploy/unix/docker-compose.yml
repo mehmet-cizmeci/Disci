@@ -1,0 +1,33 @@
+# Disci (Linux / macOS). Değerler aynı klasördeki .env dosyasından gelir; .env'yi kur-linux.sh / kur-macos.sh yazar.
+# Disci ile birlikte SQL Server da kurulduysa .env içindeki COMPOSE_FILE docker-compose.sql.yml dosyasını da ekler;
+# var olan bir SQL Server kullanılıyorsa yalnızca bu dosya çalışır ve bağlantı .env'deki DB_BAGLANTI'dan gelir.
+# Elle: docker compose up -d   ·   durdurma: docker compose down   ·   kayıtlar: docker compose logs -f web
+name: disci
+
+services:
+  web:
+    build: .
+    image: disci-web:${DISCI_SURUM:-yerel}
+    restart: unless-stopped
+    environment:
+      # 1.1.0 kurulumlarında DB_BAGLANTI yoktu (SQL Server hep birlikte kuruluyordu): o zaman "sql" konteyneri kullanılır.
+      ConnectionStrings__DefaultConnection: ${DB_BAGLANTI:-Server=sql;Database=Disci;User Id=sa;Password="${SQL_PAROLA:-}";TrustServerCertificate=True;MultipleActiveResultSets=true}
+      FileStorage__Root: /veri/files
+      DataProtection__KeysPath: /veri/keys
+      Update__Folder: /veri/Guncelleme
+      Database__MigrateOnStartup: "true"
+      FirstRunSetup__Token: ${KURULUM_ANAHTARI:-}
+      Kestrel__Endpoints__Http__Url: http://0.0.0.0:5111
+      Kestrel__Endpoints__Https__Url: https://0.0.0.0:5443
+      Kestrel__Endpoints__Https__Certificate__Path: /veri/sertifika/disci.crt
+      Kestrel__Endpoints__Https__Certificate__KeyPath: /veri/sertifika/disci.key
+      https_port: ${HTTPS_PORT:-5443}
+      TZ: ${TZ:-Europe/Istanbul}
+    # Bu bilgisayarda kurulu bir SQL Server'a konteynerden "host.docker.internal" adıyla ulaşılır.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${HTTP_PORT:-5111}:5111"
+      - "${HTTPS_PORT:-5443}:5443"
+    volumes:
+      - ./veri:/veri

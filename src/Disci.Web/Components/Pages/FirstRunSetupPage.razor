@@ -1,0 +1,124 @@
+@page "/kurulum"
+@attribute [AllowAnonymous]
+@layout Disci.Web.Components.Layout.MainLayout
+@inject FirstRunSetup State
+@inject SetupService SetupRunner
+@inject NavigationManager Nav
+
+<PageTitle>İlk kurulum</PageTitle>
+
+<div style="width:100%;max-width:640px">
+    <section class="panel" style="box-shadow:var(--shadow-lg)">
+        <div class="panel-body p-4 p-sm-5">
+            <div class="side-brand p-0 mb-4" style="height:auto">
+                <span class="logo"><Icon Name="tooth" /></span>
+                <span>Disci<small>Ücretsiz diş kliniği programı</small></span>
+            </div>
+
+            @if (!needed)
+            {
+                <h1 class="h4">Kurulum tamamlanmış</h1>
+                <p class="text-secondary">Bu programda zaten bir yönetici hesabı var.</p>
+                <a class="btn btn-primary" href="Account/Login">Giriş sayfasına git</a>
+            }
+            else if (!local)
+            {
+                <h1 class="h4">İlk kurulum bu bilgisayardan yapılamaz</h1>
+                <p class="text-secondary mb-0">
+                    Güvenlik için ilk kurulum formu yalnızca programın kurulu olduğu bilgisayarda açılır.
+                    O bilgisayarda tarayıcıya <b>https://localhost:5443/kurulum</b> yazın.
+                </p>
+            }
+            else
+            {
+                <h1 class="h4 mb-1">Hoş geldiniz</h1>
+                <p class="text-secondary mb-4">
+                    Programı kullanmaya başlamak için kliniğinizin bilgilerini ve yönetici hesabını girin.
+                    Bu bilgileri daha sonra <b>Klinik ayarları</b> ve <b>Kullanıcılar</b> sayfalarından değiştirebilirsiniz.
+                </p>
+                @if (errors.Count > 0)
+                {
+                    <div class="alert alert-danger" role="alert">
+                        @foreach (var e in errors) { <div>@e</div> }
+                    </div>
+                }
+                <EditForm Model="Input" method="post" OnValidSubmit="Save" FormName="setup">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" role="alert" />
+
+                    <h2 class="h6 text-uppercase text-secondary mt-2 mb-3">1. Klinik bilgileri <small class="text-lowercase">(makbuz ve reçetelerde yazar)</small></h2>
+                    <div class="mb-3">
+                        <label class="form-label" for="ClinicName">Klinik adı *</label>
+                        <InputText id="ClinicName" class="form-control" @bind-Value="Input.ClinicName" placeholder="Örnek Diş Kliniği" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="Address">Adres</label>
+                        <InputTextArea id="Address" class="form-control" rows="2" @bind-Value="Input.Address" />
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <label class="form-label" for="Phone">Telefon</label>
+                            <InputText id="Phone" class="form-control" @bind-Value="Input.Phone" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="ClinicEmail">Klinik e-postası</label>
+                            <InputText id="ClinicEmail" class="form-control" @bind-Value="Input.ClinicEmail" />
+                        </div>
+                    </div>
+
+                    <h2 class="h6 text-uppercase text-secondary mb-3">2. Yönetici hesabı <small class="text-lowercase">(programın bütün ayarlarını yapabilir)</small></h2>
+                    <div class="mb-3">
+                        <label class="form-label" for="FullName">Adınız soyadınız *</label>
+                        <InputText id="FullName" class="form-control" @bind-Value="Input.FullName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="DentistName">Hekim adı (takvimde görünür)</label>
+                        <InputText id="DentistName" class="form-control" @bind-Value="Input.DentistName" placeholder="Dt. Ad Soyad" />
+                        <div class="form-text">Hekimseniz doldurun; randevu takviminde bu adla bir sütun açılır. Hekim değilseniz boş bırakın, hekimleri sonra Klinik ayarlarından eklersiniz.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="Email">E-posta (giriş adınız) *</label>
+                        <InputText id="Email" class="form-control" autocomplete="username" @bind-Value="Input.Email" />
+                    </div>
+                    <div class="row g-3 mb-2">
+                        <div class="col-sm-6">
+                            <label class="form-label" for="Password">Parola *</label>
+                            <InputText id="Password" type="password" class="form-control" autocomplete="new-password" @bind-Value="Input.Password" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="ConfirmPassword">Parola (tekrar) *</label>
+                            <InputText id="ConfirmPassword" type="password" class="form-control" autocomplete="new-password" @bind-Value="Input.ConfirmPassword" />
+                        </div>
+                    </div>
+                    <p class="form-text mb-4">En az 8 karakter; büyük harf, küçük harf ve rakam içermeli. Parolayı unutmayacağınız güvenli bir yere yazın.</p>
+
+                    <button type="submit" class="btn btn-lg btn-primary w-100">Kurulumu tamamla</button>
+                </EditForm>
+            }
+        </div>
+    </section>
+    <p class="text-center small text-secondary mt-3"><a href="kilavuz">Kullanım kılavuzu</a></p>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private SetupModel Input { get; set; } = default!;
+
+    private bool needed, local;
+    private List<string> errors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        needed = await State.IsNeededAsync();
+        local = State.IsAllowed(HttpContext);
+    }
+
+    private async Task Save()
+    {
+        if (!needed || !local) return;
+        errors = (await SetupRunner.RunAsync(Input)).ToList();
+        if (errors.Count == 0)
+            Nav.NavigateTo("Account/Login?kurulum=1", forceLoad: true);
+    }
+}
